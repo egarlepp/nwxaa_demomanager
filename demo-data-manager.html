@@ -15,7 +15,7 @@ const {useState, useCallback, useEffect} = React;
 
 
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "3.1.1";
 const themes = {
   dark: {
     bg: "bg-slate-950", bgCard: "bg-slate-900/70", bgInput: "bg-slate-800/80", bgHover: "hover:bg-slate-800",
@@ -64,8 +64,8 @@ const VERTICAL_TEMPLATES = {
     label: 'Healthcare / Hospital',
     icon: '🏥',
     description: 'Hospital / medical center — PHI heavy, HIPAA-focused',
-    domain: {name:'STJOSEPH', fqdn:'stjoseph.health', sidBase:'S-1-5-21-1234567890-987654321-1122334455'},
-    spoTenant: 'stjoseph',
+    domain: {name:'MERIDIANHEALTH', fqdn:'meridianhealth.health', sidBase:'S-1-5-21-1234567890-987654321-1122334455'},
+    spoTenant: 'meridianhealth',
     departments: [
       {name:'Cardiology',weight:8,subs:['Interventional','Echocardiography','Cath Lab','Heart Failure']},
       {name:'Radiology',weight:10,subs:['Imaging','MRI','CT Scan','Ultrasound']},
@@ -116,8 +116,8 @@ const VERTICAL_TEMPLATES = {
     label: 'Financial Services / Banking',
     icon: '🏦',
     description: 'Bank / asset manager — PCI, SOX, KYC focused',
-    domain: {name:'NORTHBANK', fqdn:'northcap.bank', sidBase:'S-1-5-21-2345678901-876543210-2233445566'},
-    spoTenant: 'northcap',
+    domain: {name:'SUMMITFINANCIAL', fqdn:'summitfinancial.bank', sidBase:'S-1-5-21-2345678901-876543210-2233445566'},
+    spoTenant: 'summitfinancial',
     departments: [
       {name:'Investment Banking',weight:10,subs:['M&A','Capital Markets','Coverage']},
       {name:'Trading',weight:12,subs:['Equities','Fixed Income','FX','Derivatives']},
@@ -167,8 +167,8 @@ const VERTICAL_TEMPLATES = {
     label: 'Manufacturing / Industrial',
     icon: '🏭',
     description: 'Industrial mfg — IP, trade secrets, ITAR focus',
-    domain: {name:'ATLAS', fqdn:'atlasmfg.com', sidBase:'S-1-5-21-3456789012-765432109-3344556677'},
-    spoTenant: 'atlasmfg',
+    domain: {name:'TITANINDUSTRIES', fqdn:'titanindustries.com', sidBase:'S-1-5-21-3456789012-765432109-3344556677'},
+    spoTenant: 'titanindustries',
     departments: [
       {name:'Production',weight:20,subs:['Assembly','Machining','Welding','Quality Control']},
       {name:'Engineering',weight:12,subs:['Mechanical','Electrical','Industrial','CAD']},
@@ -218,8 +218,8 @@ const VERTICAL_TEMPLATES = {
     label: 'Engineering / Tech',
     icon: '💻',
     description: 'Software / SaaS company — source code, IP, customer data',
-    domain: {name:'AURORA', fqdn:'auroratech.io', sidBase:'S-1-5-21-4567890123-654321098-4455667788'},
-    spoTenant: 'auroratech',
+    domain: {name:'NEXUSCLOUD', fqdn:'nexuscloud.io', sidBase:'S-1-5-21-4567890123-654321098-4455667788'},
+    spoTenant: 'nexuscloud',
     departments: [
       {name:'Engineering',weight:25,subs:['Backend','Frontend','Mobile','Platform','SRE','Security']},
       {name:'Product',weight:8,subs:['PM','Design','Research','Analytics']},
@@ -269,8 +269,8 @@ const VERTICAL_TEMPLATES = {
     label: 'Federal / Government',
     icon: '🏛',
     description: 'Federal agency / contractor — classified, FOIA, FedRAMP',
-    domain: {name:'AGENCY', fqdn:'agency.gov', sidBase:'S-1-5-21-5678901234-543210987-5566778899'},
-    spoTenant: 'agencygov',
+    domain: {name:'METROCOUNTY', fqdn:'metrocounty.gov', sidBase:'S-1-5-21-5678901234-543210987-5566778899'},
+    spoTenant: 'metrocounty',
     departments: [
       {name:'Operations',weight:15,subs:['Field Ops','Mission Support','Logistics']},
       {name:'Intelligence',weight:10,subs:['Analysis','Collection','Counterintel']},
@@ -320,8 +320,8 @@ const VERTICAL_TEMPLATES = {
     label: 'Education / University',
     icon: '🎓',
     description: 'University / school — FERPA, research IP, student data',
-    domain: {name:'STATEU', fqdn:'state.edu', sidBase:'S-1-5-21-6789012345-432109876-6677889900'},
-    spoTenant: 'stateu',
+    domain: {name:'GREATPLAINS', fqdn:'greatplains.edu', sidBase:'S-1-5-21-6789012345-432109876-6677889900'},
+    spoTenant: 'greatplains',
     departments: [
       {name:'Academics',weight:18,subs:['Faculty','Curriculum','Assessment']},
       {name:'Admissions',weight:6,subs:['Undergraduate','Graduate','International']},
@@ -475,39 +475,296 @@ const VERTICAL_TEMPLATES = {
 
 const VERTICAL_KEYS = Object.keys(VERTICAL_TEMPLATES);
 
+// ═══════════════════════════════════════════════════════════════════════════
+// v3.1.0: REGIONALIZATION — 8 locales drive names, domains, departments, regs
+// ═══════════════════════════════════════════════════════════════════════════
+// Region is selected globally; cascades to: user names, email domains, company
+// names (per industry), department names, and regional regulation overlays.
+// Each locale supplies the same 6 layers so generators can swap regions cleanly.
+
+const LOCALES = {
+  us: {
+    code: 'us', name: 'United States', flag: '🇺🇸',
+    emailTlds: ['com'],
+    phonePrefix: '+1',
+    offices: [['HQ','100 Innovation Drive','Austin','TX','78701','US'],['NYC','350 5th Avenue','New York','NY','10118','US'],['SFO','101 Market Street','San Francisco','CA','94105','US'],['CHI','233 S Wacker Drive','Chicago','IL','60606','US'],['BOS','1 Federal Street','Boston','MA','02110','US']],
+    legalSuffixes: ['Inc', 'LLC', 'Corp'],
+    firstNames: ['James','Mary','John','Patricia','Robert','Jennifer','Michael','Linda','William','Elizabeth','David','Barbara','Richard','Susan','Joseph','Jessica','Thomas','Sarah','Charles','Karen','Christopher','Nancy','Daniel','Lisa','Matthew','Margaret','Anthony','Betty','Mark','Sandra','Donald','Ashley','Steven','Kimberly','Paul','Emily','Andrew','Donna','Joshua','Michelle','Kenneth','Carol','Kevin','Amanda','Brian','Dorothy','George','Melissa','Edward','Deborah'],
+    lastNames: ['Smith','Johnson','Williams','Brown','Jones','Miller','Davis','Wilson','Anderson','Thomas','Taylor','Moore','Jackson','Martin','Lee','Thompson','White','Harris','Clark','Lewis','Robinson','Walker','Young','Allen','King','Wright','Scott','Hill','Green','Adams','Nelson','Baker','Hall','Campbell','Mitchell','Carter','Roberts','Phillips','Evans','Turner','Parker','Edwards','Collins','Stewart','Sanchez','Morris','Rogers','Reed','Cook','Morgan'],
+    departments: {executive:'Executive',finance:'Finance',hr:'Human Resources',it:'IT',sales:'Sales',marketing:'Marketing',legal:'Legal',ops:'Operations'},
+    extraRegulations: []
+  },
+  latam_pt: {
+    code: 'latam_pt', name: 'LATAM (Brazil/PT)', flag: '🇧🇷',
+    emailTlds: ['com.br'],
+    phonePrefix: '+55',
+    offices: [['HQ','Avenida Paulista 1000','São Paulo','SP','01310-100','BR'],['RIO','Avenida Atlântica 500','Rio de Janeiro','RJ','22070-002','BR'],['BSB','SCS Quadra 1','Brasília','DF','70300-901','BR'],['POA','Avenida Borges de Medeiros 600','Porto Alegre','RS','90020-020','BR']],
+    legalSuffixes: ['Ltda','S.A.','S.A.S.','EIRELI'],
+    firstNames: ['João','Maria','José','Ana','Antonio','Francisca','Carlos','Antônia','Paulo','Adriana','Pedro','Juliana','Lucas','Márcia','Luiz','Fernanda','Marcos','Patrícia','Gabriel','Aline','Rafael','Sandra','Daniel','Camila','Marcelo','Amanda','Bruno','Bruna','Eduardo','Jessica','Felipe','Letícia','Ricardo','Bianca','Rodrigo','Luciana','Fernando','Vanessa','Tiago','Renata','André','Vivian','Leonardo','Tatiana','Mateus','Carolina','Vinícius','Mariana','Thiago','Beatriz'],
+    lastNames: ['Silva','Santos','Oliveira','Souza','Rodrigues','Ferreira','Alves','Pereira','Lima','Gomes','Costa','Ribeiro','Martins','Carvalho','Almeida','Lopes','Soares','Fernandes','Vieira','Barbosa','Rocha','Dias','Nascimento','Andrade','Moreira','Nunes','Marques','Machado','Mendes','Freitas','Cardoso','Ramos','Gonçalves','Santana','Teixeira','Cavalcanti','Pinto','Castro','Cunha','Correia','Araújo','Pires','Monteiro','Mota','Campos','Borges','Sousa','Reis','Coelho','Brito'],
+    departments: {executive:'Diretoria',finance:'Financeiro',hr:'Recursos Humanos',it:'Tecnologia',sales:'Vendas',marketing:'Marketing',legal:'Jurídico',ops:'Operações'},
+    extraRegulations: ['LGPD (Brazil)','Marco Civil da Internet']
+  },
+  latam_es: {
+    code: 'latam_es', name: 'LATAM (Spanish)', flag: '🇲🇽',
+    emailTlds: ['com.mx','com.ar','com.co','com.cl','com.pe'],
+    phonePrefix: '+52',
+    offices: [['HQ','Paseo de la Reforma 222','Ciudad de México','CDMX','06600','MX'],['BUE','Avenida Corrientes 1000','Buenos Aires','','C1043','AR'],['BOG','Carrera 7 #71-21','Bogotá','','110231','CO'],['SCL','Avenida Apoquindo 4500','Santiago','','7550000','CL'],['LIM','Avenida Javier Prado 1000','Lima','','15036','PE']],  // rotate across Spanish-LATAM
+    legalSuffixes: ['S.A.','S.A. de C.V.','S.R.L.','S.A.C.'],
+    firstNames: ['Juan','María','Pedro','Ana','Carlos','Sofía','Miguel','Lucía','José','Camila','Diego','Valentina','Luis','Isabella','Andrés','Mariana','Felipe','Daniela','Gabriel','Paula','Sebastián','Antonella','Mateo','Renata','Nicolás','Ximena','Tomás','Catalina','Javier','Florencia','Santiago','Mónica','Alejandro','Verónica','Manuel','Patricia','Esteban','Carolina','Pablo','Gabriela','Cristián','Andrea','Joaquín','Bárbara','Martín','Alejandra','Maximiliano','Romina','Agustín','Constanza'],
+    lastNames: ['García','Rodríguez','Hernández','González','López','Martínez','Pérez','Sánchez','Ramírez','Torres','Flores','Rivera','Gómez','Díaz','Reyes','Cruz','Morales','Ortiz','Gutiérrez','Chávez','Ramos','Ruiz','Mendoza','Vargas','Castillo','Jiménez','Vásquez','Romero','Suárez','Núñez','Castro','Espinoza','Aguilar','Acosta','Medina','Salazar','Cabrera','Soto','Valenzuela','Fuentes','Contreras','Silva','Carrasco','Bravo','Pizarro','Alarcón','Tapia','Lagos','Sanhueza','Sandoval'],
+    departments: {executive:'Dirección Ejecutiva',finance:'Finanzas',hr:'Recursos Humanos',it:'Tecnología',sales:'Ventas',marketing:'Marketing',legal:'Legal',ops:'Operaciones'},
+    extraRegulations: ['LFPDPPP (Mexico)','Ley 25.326 (Argentina)','Ley 1581 (Colombia)']
+  },
+  uk: {
+    code: 'uk', name: 'United Kingdom', flag: '🇬🇧',
+    emailTlds: ['co.uk'],
+    phonePrefix: '+44',
+    offices: [['HQ','30 Finsbury Square','London','','EC2A 1AG','GB'],['MAN','1 Spinningfields','Manchester','','M3 3JE','GB'],['EDI','50 Lothian Road','Edinburgh','','EH3 9WJ','GB'],['BRS','Temple Quay','Bristol','','BS1 6DZ','GB']],
+    legalSuffixes: ['Plc','Ltd'],
+    firstNames: ['Oliver','Amelia','Harry','Olivia','Jack','Isla','George','Ava','Noah','Lily','Charlie','Mia','Leo','Sophia','Jacob','Ella','Oscar','Grace','Henry','Freya','William','Charlotte','Thomas','Emily','Alfie','Poppy','Joshua','Daisy','Archie','Phoebe','James','Florence','Ethan','Evie','Edward','Willow','Daniel','Maisie','Theo','Sienna','Samuel','Matilda','Lucas','Harper','Logan','Ruby','Mason','Esme','Joseph','Eliza'],
+    lastNames: ['Smith','Jones','Williams','Brown','Taylor','Davies','Wilson','Evans','Thomas','Roberts','Johnson','Walker','Wright','Robinson','Thompson','White','Hughes','Edwards','Green','Hall','Wood','Harris','Martin','Jackson','Clarke','Clark','Turner','Hill','Scott','Cooper','Morris','Ward','Moore','King','Watson','Baker','Harrison','Morgan','Patel','Young','Allen','Mitchell','James','Anderson','Phillips','Lee','Bell','Parker','Davis','Bennett'],
+    departments: {executive:'Executive',finance:'Finance',hr:'Human Resources',it:'IT',sales:'Sales',marketing:'Marketing',legal:'Legal',ops:'Operations'},
+    extraRegulations: ['UK GDPR','DPA 2018','NIS Regulations']
+  },
+  de: {
+    code: 'de', name: 'Germany', flag: '🇩🇪',
+    emailTlds: ['de'],
+    phonePrefix: '+49',
+    offices: [['HQ','Friedrichstraße 200','Berlin','','10117','DE'],['MUC','Maximilianstraße 35','München','','80539','DE'],['FRA','Kaiserstraße 60','Frankfurt am Main','','60329','DE'],['HAM','Jungfernstieg 38','Hamburg','','20354','DE']],
+    legalSuffixes: ['GmbH','AG','KG'],
+    firstNames: ['Lukas','Anna','Felix','Lea','Maximilian','Sophie','Paul','Mia','Jonas','Emma','Leon','Hannah','Finn','Marie','Noah','Lina','Elias','Sofia','Ben','Lara','Luis','Clara','Tim','Laura','Jan','Lena','Niklas','Ella','Tom','Maja','Henri','Amelie','Moritz','Greta','Philip','Charlotte','Alexander','Klara','Julian','Helena','David','Johanna','Florian','Mathilda','Stefan','Frieda','Andreas','Antonia','Thomas','Pauline'],
+    lastNames: ['Müller','Schmidt','Schneider','Fischer','Weber','Wagner','Becker','Schulz','Hoffmann','Schäfer','Koch','Bauer','Richter','Klein','Wolf','Schröder','Neumann','Schwarz','Zimmermann','Braun','Krüger','Hartmann','Lange','Schmitt','Werner','Schmitz','Krause','Meier','Lehmann','Schmid','Schulze','Maier','Köhler','Herrmann','König','Walter','Mayer','Huber','Kaiser','Fuchs','Peters','Lang','Scholz','Möller','Weiß','Jung','Hahn','Schubert','Vogel','Friedrich'],
+    departments: {executive:'Geschäftsleitung',finance:'Finanzen',hr:'Personal',it:'IT',sales:'Vertrieb',marketing:'Marketing',legal:'Recht',ops:'Operations'},
+    extraRegulations: ['BDSG','TTDSG']
+  },
+  it: {
+    code: 'it', name: 'Italy', flag: '🇮🇹',
+    emailTlds: ['it'],
+    phonePrefix: '+39',
+    offices: [['HQ','Via del Corso 100','Roma','','00186','IT'],['MIL','Corso Buenos Aires 50','Milano','','20124','IT'],['TOR','Via Roma 15','Torino','','10121','IT'],['NAP','Via Toledo 200','Napoli','','80132','IT']],
+    legalSuffixes: ['S.p.A.','S.r.l.'],
+    firstNames: ['Giuseppe','Maria','Antonio','Anna','Marco','Sofia','Luca','Giulia','Andrea','Martina','Francesco','Sara','Matteo','Chiara','Alessandro','Francesca','Davide','Alessia','Riccardo','Alice','Lorenzo','Aurora','Tommaso','Beatrice','Stefano','Elena','Gabriele','Giorgia','Federico','Greta','Simone','Camilla','Daniele','Emma','Giovanni','Vittoria','Pietro','Noemi','Filippo','Ginevra','Edoardo','Adele','Leonardo','Bianca','Cristian','Elisa','Mattia','Ludovica','Roberto','Margherita'],
+    lastNames: ['Rossi','Russo','Ferrari','Esposito','Bianchi','Romano','Colombo','Ricci','Marino','Greco','Bruno','Gallo','Conti','De Luca','Mancini','Costa','Giordano','Rizzo','Lombardi','Moretti','Barbieri','Fontana','Santoro','Mariani','Rinaldi','Caruso','Ferrara','Galli','Martini','Leone','Longo','Gentile','Martinelli','Vitale','Lombardo','Serra','Coppola','De Santis','D\'Angelo','Marchetti','Parisi','Villa','Conte','Ferretti','Bianco','Sanna','Farina','Gatti','Pellegrini','Palumbo'],
+    departments: {executive:'Direzione',finance:'Finanza',hr:'Risorse Umane',it:'IT',sales:'Vendite',marketing:'Marketing',legal:'Legale',ops:'Operazioni'},
+    extraRegulations: ['Codice Privacy','Garante Privacy Guidelines']
+  },
+  fr: {
+    code: 'fr', name: 'France', flag: '🇫🇷',
+    emailTlds: ['fr'],
+    phonePrefix: '+33',
+    offices: [['HQ','15 Avenue Montaigne','Paris','','75008','FR'],['LYO','12 Place Bellecour','Lyon','','69002','FR'],['MRS','La Canebière 50','Marseille','','13001','FR'],['TOU','24 Place du Capitole','Toulouse','','31000','FR']],
+    legalSuffixes: ['SA','SAS','SARL'],
+    firstNames: ['Antoine','Camille','Lucas','Léa','Pierre','Marie','Hugo','Emma','Louis','Chloé','Jules','Manon','Gabriel','Sarah','Arthur','Inès','Adam','Jade','Raphaël','Anaïs','Nathan','Louise','Léo','Zoé','Maël','Romane','Théo','Lucie','Ethan','Juliette','Tom','Pauline','Mathéo','Ambre','Sacha','Margot','Liam','Élise','Mathis','Clara','Aaron','Eva','Benjamin','Alice','Noah','Lina','Maxime','Charlotte','Victor','Mila'],
+    lastNames: ['Dupont','Bernard','Martin','Petit','Robert','Richard','Dubois','Moreau','Laurent','Simon','Michel','Lefebvre','Leroy','Roux','David','Bertrand','Morel','Fournier','Girard','Bonnet','Dupuy','Lambert','Fontaine','Rousseau','Vincent','Mercier','Blanc','Guerin','Boyer','Garnier','Chevalier','François','Legrand','Gauthier','Perrin','Robin','Clément','Morin','Nicolas','Henry','Roussel','Mathieu','Gautier','Masson','Marchand','Duval','Denis','Dumont','Lemaire','Renaud'],
+    departments: {executive:'Direction',finance:'Finance',hr:'Ressources Humaines',it:'Informatique',sales:'Ventes',marketing:'Marketing',legal:'Juridique',ops:'Opérations'},
+    extraRegulations: ['Loi Informatique et Libertés','CNIL Guidelines']
+  },
+  slavic: {
+    code: 'slavic', name: 'Slavic (RU/PL/CZ)', flag: '🇵🇱',
+    emailTlds: ['ru','pl','cz'],
+    phonePrefix: '+48',
+    offices: [['HQ','ulica Marszałkowska 100','Warszawa','','00-001','PL'],['MOW','Tverskaya 7','Moskva','','125009','RU'],['PRG','Václavské náměstí 30','Praha','','11000','CZ'],['KRA','Rynek Główny 25','Kraków','','31-008','PL']],  // rotate
+    legalSuffixes: ['OOO','Sp. z o.o.','s.r.o.'],
+    firstNames: ['Aleksei','Anna','Dmitri','Olga','Pavel','Katya','Jan','Magdalena','Petr','Alena','Mikhail','Tatiana','Sergei','Natalia','Tomasz','Václav','Jana','Andrei','Yulia','Krzysztof','Agnieszka','Lucie','Vladimir','Elena','Wojciech','Boris','Svetlana','Igor','Daria','Karol','Ewa','Roman','Iva','Nikolai','Veronika','Adam','Zofia','Stanislav','Hana','Marek','Ivan','Klara','Alexei','Petra','Jakub','Bara','Piotr','Aleksandra','Lubomir','Katarzyna'],
+    lastNames: ['Ivanov','Smirnov','Kuznetsov','Popov','Sokolov','Vasiliev','Petrov','Mikhailov','Volkov','Pavlov','Kowalski','Nowak','Wiśniewski','Wójcik','Kowalczyk','Kamiński','Zieliński','Szymański','Lewandowski','Mazur','Novák','Svoboda','Novotný','Dvořák','Černý','Procházka','Kučera','Veselý','Horák','Krejčí','Soloviev','Lebedev','Kozlov','Novikov','Morozov','Romanov','Fedorov','Egorov','Wojciechowski','Krawczyk','Kaczmarek','Mazurek','Sedláček','Pokorný','Kratochvíl','Beneš','Sokol','Hájek','Marek','Růžička'],
+    departments: {executive:'Руководство',finance:'Финансы',hr:'Кадры',it:'ИТ',sales:'Продажи',marketing:'Маркетинг',legal:'Юридический',ops:'Операции'},
+    extraRegulations: ['152-FZ (Russia)','RODO/Polish DPA','Czech Act 110/2019']
+  },
+  es: {
+    code: 'es', name: 'Spain', flag: '🇪🇸',
+    emailTlds: ['es'],
+    phonePrefix: '+34',
+    offices: [['HQ','Calle de Alcalá 25','Madrid','','28014','ES'],['BCN','Passeig de Gràcia 100','Barcelona','','08008','ES'],['VLC','Avenida del Puerto 30','València','','46021','ES'],['SEV','Avenida de la Constitución','Sevilla','','41001','ES']],
+    legalSuffixes: ['S.A.','S.L.'],
+    firstNames: ['Antonio','María','José','Carmen','Manuel','Ana','Javier','Lucía','Francisco','Sara','David','Laura','Juan','Paula','Daniel','Marta','Jesús','Cristina','Carlos','Elena','Ángel','Isabel','Miguel','Rocío','Rafael','Alba','Pedro','Andrea','Pablo','Patricia','Luis','Sofía','Sergio','Natalia','Fernando','Inés','Jorge','Beatriz','Alejandro','Sandra','Diego','Lorena','Adrián','Carla','Mario','Rebeca','Iván','Mónica','Rubén','Silvia'],
+    lastNames: ['García','Rodríguez','González','Fernández','López','Martínez','Sánchez','Pérez','Gómez','Martín','Jiménez','Ruiz','Hernández','Díaz','Moreno','Muñoz','Álvarez','Romero','Alonso','Gutiérrez','Navarro','Torres','Domínguez','Vázquez','Ramos','Gil','Ramírez','Serrano','Blanco','Suárez','Molina','Morales','Ortega','Delgado','Castro','Ortiz','Rubio','Marín','Sanz','Iglesias','Núñez','Medina','Garrido','Cortés','Castillo','Santos','Lozano','Guerrero','Cano','Prieto'],
+    departments: {executive:'Dirección',finance:'Finanzas',hr:'Recursos Humanos',it:'TI',sales:'Ventas',marketing:'Marketing',legal:'Legal',ops:'Operaciones'},
+    extraRegulations: ['LOPDGDD','CCN-CERT','Esquema Nacional de Seguridad']
+  }
+};
+
+const LOCALE_KEYS = Object.keys(LOCALES);
+
+// Company name matrix: [vertical][locale] → name
+// 9 verticals × 8 locales = 72 hand-curated cells. Falls back to {ACME} {legalSuffix} if missing.
+const COMPANY_NAMES = {
+  generic:       { us:'ACME Corp',                latam_pt:'EMPRESA GERAL Ltda',          latam_es:'COMPAÑÍA GENERAL S.A.',  uk:'GLOBEX Ltd',                de:'ALLGEMEIN GmbH',          it:'GENERALE S.p.A.',                 fr:'ENTREPRISE GÉNÉRALE SAS',     slavic:'OBSHCHESTVO OOO',     es:'EMPRESA GENERAL S.L.' },
+  healthcare:    { us:'MERIDIAN HEALTH Inc',      latam_pt:'CLÍNICA BRASIL S.A.',         latam_es:'CLÍNICA SUDAMERICANA S.A.', uk:'NHS PARTNERS Plc',       de:'MEDIKLINIK GmbH',         it:'SALUTE ROMA S.p.A.',              fr:'SANTÉ NATIONALE SA',          slavic:'MEDSERVIS OOO',       es:'SALUD HISPANIA S.L.' },
+  finance:       { us:'SUMMIT FINANCIAL Inc',     latam_pt:'BANCO ATLÂNTICO S.A.',        latam_es:'BANCO ATLÁNTICO S.A.',   uk:'STERLING CAPITAL Plc',      de:'HANSAFINANZ GmbH',        it:'BANCA TIBERIA S.p.A.',            fr:'CRÉDIT GAULOIS SA',           slavic:'FINBANK OOO',         es:'BANCO IBERIA S.A.' },
+  manufacturing: { us:'TITAN INDUSTRIES Inc',     latam_pt:'INDÚSTRIA AMAZÔNICA Ltda',    latam_es:'INDUSTRIA ANDINA S.A.',  uk:'BRITANNIA MANUFACTURING Plc', de:'STAHLWERK BRANDT GmbH', it:'INDUSTRIA TORINO S.p.A.',         fr:'MANUFACTURE DU NORD SAS',     slavic:'PROMSTAL OOO',        es:'INDUSTRIAS IBÉRICAS S.L.' },
+  engineering:   { us:'NEXUSCLOUD Inc',           latam_pt:'TECHNOSUL Ltda',              latam_es:'TECHNOSUR S.A.',         uk:'CLOUDSPHERE Plc',           de:'TECHNIK SOLUTIONS GmbH',  it:'INNOVATECH MILANO S.p.A.',        fr:'NUMÉRIQUE FRANCE SAS',        slavic:'SOFTSERVIS OOO',      es:'TECNOLÓGICA IBÉRICA S.L.' },
+  federal:       { us:'METRO COUNTY GOV',         latam_pt:'GOVERNO MUNICIPAL',           latam_es:'GOBIERNO MUNICIPAL',     uk:'HM PUBLIC SERVICES',        de:'BUNDESVERWALTUNG',        it:'PUBBLICA AMMINISTRAZIONE',        fr:'ADMINISTRATION PUBLIQUE',     slavic:'GOSUDARSTVO',         es:'ADMINISTRACIÓN PÚBLICA' },
+  education:     { us:'GREATPLAINS UNIVERSITY',   latam_pt:'UNIVERSIDADE DO SUL',         latam_es:'UNIVERSIDAD DEL SUR',    uk:'NORTHUMBRIA COLLEGE',       de:'UNIVERSITÄT HOHEFELD',    it:'UNIVERSITÀ DI ROMA TIBERINA',     fr:'UNIVERSITÉ DE LA SORBONNE-NORD', slavic:'UNIVERSITET MOSKVA', es:'UNIVERSIDAD COMPLUTENSE DEL ESTE' },
+  retail:        { us:'TRENDMART Inc',            latam_pt:'COMERCIO BRASIL Ltda',        latam_es:'COMERCIO HISPANIA S.A.', uk:'ALBION RETAIL Plc',         de:'KAUFHAUS MERIDIAN GmbH',  it:'COMMERCIO MILANO S.p.A.',         fr:'GRAND COMPTOIR SAS',          slavic:'TORGSERVIS OOO',      es:'COMERCIO IBÉRICO S.L.' },
+  energy:        { us:'PACIFICPOWER Corp',        latam_pt:'ENERGIA AMAZÔNICA S.A.',      latam_es:'ENERGÍA ANDINA S.A.',    uk:'NORTHGRID Plc',             de:'RHEINKRAFT GmbH',         it:'TIRRENO ENERGIA S.p.A.',          fr:'ÉNERGIE GAULOISE SA',         slavic:'ENERGOSNAB OOO',      es:'IBERPOWER S.A.' }
+};
+
+// Helpers — all return safe defaults if locale missing (back-compat for old configs)
+const getLocale = (cfg) => LOCALES[cfg?.global?.locale] || LOCALES.us;
+const getCompanyName = (cfg) => {
+  const v = cfg?.global?.vertical || 'generic';
+  const l = cfg?.global?.locale || 'us';
+  return COMPANY_NAMES[v]?.[l] || COMPANY_NAMES.generic[l] || COMPANY_NAMES.generic.us;
+};
+// For LATAM/Slavic rotate-per-call: deterministic-per-index so multiple calls in same run are realistic
+const pickEmailTld = (cfg, idx=0) => {
+  const loc = getLocale(cfg);
+  return loc.emailTlds[idx % loc.emailTlds.length];
+};
+const pickLegalSuffix = (cfg, idx=0) => {
+  const loc = getLocale(cfg);
+  return loc.legalSuffixes[idx % loc.legalSuffixes.length];
+};
+
+// v3.1.0: normalize a name part for sam/UPN/email construction.
+// Handles common European special chars that NFD-strip alone doesn't cover (ß, æ, ø, œ).
+// "Müller" → "mueller" | "São" → "sao" | "Léa" → "lea" | "Weiß" → "weiss" | "D'Angelo" → "dangelo"
+function normalizeNamePart(s) {
+  return (s||'')
+    .replace(/ß/g, 'ss')
+    .replace(/Ä/g,'Ae').replace(/Ö/g,'Oe').replace(/Ü/g,'Ue')
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue')
+    .replace(/æ/g,'ae').replace(/Æ/g,'AE')
+    .replace(/ø/g,'o').replace(/Ø/g,'O')
+    .replace(/œ/g,'oe').replace(/Œ/g,'OE')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+// v3.1.0-beta3: derive AD-style domain name + FQDN base from a regional company name.
+// "CLÍNICA BRASIL S.A." → { adName: 'CLINICABRASIL', fqdnBase: 'clinica-brasil' }
+function deriveDomainFromCompany(companyName) {
+  let clean = (companyName||'').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // Strip legal suffixes — order matters: longer/more-specific first
+  clean = clean.replace(/\s+(S\.p\.A\.|S\.r\.l\.|S\.A\.S\.|S\.A\.C\.|S\.R\.L\.|S\.A\. de C\.V\.|S\.A\.|S\.L\.|Sp\. z o\.o\.|s\.r\.o\.|EIRELI|GmbH|SARL|Ltda|Corp|Plc|Inc|LLC|SAS|OOO|Ltd|KG|AG|SA)\s*$/i, '').trim();
+  // Collapse internal whitespace
+  clean = clean.replace(/\s+/g, ' ');
+
+  let adName = clean.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (adName.length > 16) adName = adName.substring(0, 16);
+
+  let fqdnBase = clean.toLowerCase().split(/\s+/).join('-').replace(/[^a-z0-9-]/g, '');
+  if (fqdnBase.length > 24) {
+    // Fall back to first 2 words if full name is too long for a clean domain
+    fqdnBase = clean.toLowerCase().split(/\s+/).slice(0, 2).join('-').replace(/[^a-z0-9-]/g, '');
+  }
+
+  return { adName, fqdnBase };
+}
+
+// v3.1.0-beta: cascade locale change → updates domain, taxonomies, SPO URLs, FS hostnames.
+// v3.1.0-beta5: delegates to applyVerticalTemplate after setting locale, so SPO/FS refresh too.
+function applyLocaleChange(cfg, newLocaleKey) {
+  const newLoc = LOCALES[newLocaleKey] || LOCALES.us;
+  const oldLoc = LOCALES[cfg?.global?.locale] || LOCALES.us;
+
+  // Step 1: set new locale, then let applyVerticalTemplate recompute domain/SPO/FS based on it
+  let updated = { ...cfg, global: { ...cfg.global, locale: newLocaleKey } };
+  updated = applyVerticalTemplate(updated, updated.global.vertical || 'generic');
+
+  // Step 2: adjust taxonomies — remove ALL prior regional regs from any locale, add new locale's
+  // (applyVerticalTemplate handles vertical taxonomies; this pass scrubs cross-locale regional regs)
+  const oldRegSet = new Set(oldLoc.extraRegulations);
+  const filteredTax = (updated.sd?.taxonomies || []).filter(t => !oldRegSet.has(t.name));
+  const existingNames = new Set(filteredTax.map(t => t.name));
+  for (const regName of newLoc.extraRegulations) {
+    if (!existingNames.has(regName)) {
+      filteredTax.push({ name: regName, region: 'Regional', terms: [], enabled: true });
+    }
+  }
+  return { ...updated, sd: { ...(updated.sd||{}), taxonomies: filteredTax } };
+}
+
+
 // V2.6.8: Apply a vertical template to a cfg — returns new cfg with merged values.
 // Non-destructive for global counts (userCount, groupCount, etc.) — only replaces names/structure.
 const applyVerticalTemplate = (cfg, verticalKey) => {
   const tpl = VERTICAL_TEMPLATES[verticalKey];
-  if (!tpl || verticalKey === 'generic') return {...cfg, global:{...cfg.global, vertical:verticalKey}};
+  const locale = LOCALES[cfg?.global?.locale] || LOCALES.us;
+  const isUsBaseline = (cfg.global?.locale || 'us') === 'us';
+
+  // v3.1.0-beta3: derive domain name+fqdn from regional company name when non-US
+  // For 'generic' vertical: still need to apply regional domain even without a template
+  if (!tpl || verticalKey === 'generic') {
+    let genDomainName, genDomainFqdn;
+    if (isUsBaseline) {
+      genDomainName = 'ACME';
+      genDomainFqdn = 'acme.local';
+    } else {
+      const company = COMPANY_NAMES.generic?.[cfg.global.locale];
+      const derived = deriveDomainFromCompany(company);
+      genDomainName = derived.adName;
+      genDomainFqdn = `${derived.fqdnBase}.${locale.emailTlds[0]}`;
+    }
+    // Refresh FS hostnames + SPO tenant URLs to current regional domain
+    const genSpoTenant = genDomainName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const genFs = cfg.fs?.hosts?.length ? {...cfg.fs, hosts: cfg.fs.hosts.map(h => ({
+      ...h, hostname: `${(h.hostname||'fs01').split('.')[0]}.${genDomainFqdn}`,
+    }))} : cfg.fs;
+    const genSpo = cfg.spo?.tenants?.length ? {...cfg.spo, tenants: cfg.spo.tenants.map(tnt => {
+      const isMy = (tnt.url||'').includes('-my.sharepoint.com');
+      const newTenantUrl = `https://${genSpoTenant}${isMy?'-my':''}.sharepoint.com`;
+      return {...tnt, url: newTenantUrl, sites: (tnt.sites||[]).map(s => ({...s,
+        url: (s.url||'').replace(/^https:\/\/[^/]+/, newTenantUrl),
+      }))};
+    })} : cfg.spo;
+    return {...cfg, global:{...cfg.global, vertical:verticalKey, domainName:genDomainName, domainFqdn:genDomainFqdn}, fs:genFs, spo:genSpo};
+  }
 
   // 1) Global: domain + tenant
+  // For US: use vertical's hardcoded themed TLD (.health/.edu/.gov/.bank — preserves brand identity)
+  // For non-US: derive both name and FQDN from regional company name in COMPANY_NAMES matrix
+  let newDomainName, newDomainFqdn;
+  if (isUsBaseline) {
+    newDomainName = tpl.domain?.name || cfg.global.domainName;
+    newDomainFqdn = tpl.domain?.fqdn || cfg.global.domainFqdn;
+  } else {
+    const company = COMPANY_NAMES[verticalKey]?.[cfg.global.locale] || COMPANY_NAMES.generic[cfg.global.locale];
+    const derived = deriveDomainFromCompany(company);
+    newDomainName = derived.adName;
+    newDomainFqdn = `${derived.fqdnBase}.${locale.emailTlds[0]}`;
+  }
+
   const newGlobal = {
     ...cfg.global,
     vertical: verticalKey,
-    domainName: tpl.domain?.name || cfg.global.domainName,
-    domainFqdn: tpl.domain?.fqdn || cfg.global.domainFqdn,
+    domainName: newDomainName,
+    domainFqdn: newDomainFqdn,
     sidBase: tpl.domain?.sidBase || cfg.global.sidBase,
   };
 
   // 2) AD departments
   const newAd = {...cfg.ad, departments: tpl.departments || cfg.ad.departments};
 
-  // 3) FS hosts/shares
+  // 3) FS hosts/shares — hostnames become FQDNs using current (regional) domain
+  // v3.1.0-beta5: fs01 → fs01.meridianhealth.health (US) or fs01.clinica-brasil.com.br (LATAM-PT)
   let newFs = cfg.fs;
   if (tpl.fsShares) {
     newFs = {...cfg.fs, hosts: tpl.fsShares.map(h => ({
-      hostname: h.host,
+      hostname: `${h.host}.${newDomainFqdn}`,
       os: h.os,
       shares: h.shares.map(s => ({...s})),
     }))};
+  } else if (cfg.fs?.hosts?.length) {
+    // No template fsShares (e.g. generic vertical) — refresh existing hosts' FQDNs to current domain
+    newFs = {...cfg.fs, hosts: cfg.fs.hosts.map(h => ({
+      ...h,
+      hostname: `${(h.hostname||'fs01').split('.')[0]}.${newDomainFqdn}`,
+    }))};
   }
 
-  // 4) SPO tenants/sites
+  // 4) SPO tenants/sites — tenant prefix derives from regional company (US uses tpl.spoTenant; non-US derives from domainName)
+  // v3.1.0-beta5: meridianhealth.sharepoint.com (US) → clinicabrasil.sharepoint.com (LATAM-PT)
+  const spoTenant = isUsBaseline
+    ? (tpl.spoTenant || newDomainName.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    : newDomainName.toLowerCase().replace(/[^a-z0-9]/g, '');
   let newSpo = cfg.spo;
-  if (tpl.spoSites && tpl.spoTenant) {
-    const mainUrl = `https://${tpl.spoTenant}.sharepoint.com`;
-    const myUrl = `https://${tpl.spoTenant}-my.sharepoint.com`;
+  if (tpl.spoSites && spoTenant) {
+    const mainUrl = `https://${spoTenant}.sharepoint.com`;
+    const myUrl = `https://${spoTenant}-my.sharepoint.com`;
     const sites = tpl.spoSites.map(s => ({
       name: s.name,
       url: `${mainUrl}/sites/${s.pathSuffix}`,
@@ -518,7 +775,7 @@ const applyVerticalTemplate = (cfg, verticalKey) => {
     }));
     const odSites = (tpl.onedriveUsers || []).map(uname => ({
       name: `OneDrive - ${uname.replace(/_/g,' ')}`,
-      url: `${myUrl}/personal/${uname.toLowerCase()}_${tpl.spoTenant}_${(tpl.domain?.fqdn||'').replace(/\./g,'_')}`,
+      url: `${myUrl}/personal/${uname.toLowerCase()}_${spoTenant}_${newDomainFqdn.replace(/\./g,'_')}`,
       type: 'onedrive',
       docs: 40 + Math.floor(Math.random()*30),
       sensitiveRate: 30 + Math.floor(Math.random()*30),
@@ -528,16 +785,41 @@ const applyVerticalTemplate = (cfg, verticalKey) => {
       {url: mainUrl, sites: sites},
       {url: myUrl, sites: odSites},
     ]};
+  } else if (cfg.spo?.tenants?.length && spoTenant) {
+    // No template spoSites (e.g. generic vertical) — rewrite existing tenant URLs to current SPO prefix
+    const mainUrl = `https://${spoTenant}.sharepoint.com`;
+    const myUrl = `https://${spoTenant}-my.sharepoint.com`;
+    newSpo = {...cfg.spo, tenants: cfg.spo.tenants.map(tnt => {
+      const isMy = (tnt.url||'').includes('-my.sharepoint.com');
+      const newTenantUrl = isMy ? myUrl : mainUrl;
+      return {
+        ...tnt,
+        url: newTenantUrl,
+        sites: (tnt.sites||[]).map(s => ({
+          ...s,
+          url: (s.url||'').replace(/^https:\/\/[^/]+/, newTenantUrl),
+        })),
+      };
+    })};
   }
 
-  // 5) Sensitive data taxonomies — enable the ones in tpl.taxonomies
+  // 5) Sensitive data taxonomies — enable vertical's chosen + preserve regional regs as enabled
   let newSd = cfg.sd;
   if (tpl.taxonomies) {
     const enabledSet = new Set(tpl.taxonomies);
-    newSd = {...cfg.sd, taxonomies: cfg.sd.taxonomies.map(t => ({
+    const regionalRegs = new Set(locale.extraRegulations);
+    const updatedTax = cfg.sd.taxonomies.map(t => ({
       ...t,
-      enabled: enabledSet.has(t.name),
-    }))};
+      enabled: enabledSet.has(t.name) || regionalRegs.has(t.name),
+    }));
+    // Ensure regional regs are present in the list (in case they weren't added yet)
+    const existingNames = new Set(updatedTax.map(t => t.name));
+    for (const regName of locale.extraRegulations) {
+      if (!existingNames.has(regName)) {
+        updatedTax.push({ name: regName, region: 'Regional', terms: [], enabled: true });
+      }
+    }
+    newSd = {...cfg.sd, taxonomies: updatedTax};
   }
 
   return {...cfg, global:newGlobal, ad:newAd, fs:newFs, spo:newSpo, sd:newSd};
@@ -616,7 +898,7 @@ const chDefault=(colType)=>{
 /* ─── Default Config ──────────────────────────────────── */
 const DEFAULT_CONFIG = {
   connection:{url:"https://appaa.cloud.lab",username:"administrator@cloud.lab",password:"",method:"clickhouse_http",ch_host:"localhost",ch_port:8123,ch_user:"default",ch_pass:"",aa26Host:"appaa.cloud.lab",aa26SessionCookie:""},
-  global:{vertical:"generic",domainName:"ACME",domainFqdn:"acme.local",sidBase:"S-1-5-21-3298745201-1587429463-2190384756",tenantId:"a1b2c3d4-e5f6-7890-abcd-ef1234567890",historyMonths:2,scanFreqDays:14,richActivityTimeline:0,batchOffset:0,activityPattern:{enabled:false,workStart:9,workEnd:17,lunchDip:true,nightActivity:false,weekendActivity:false}},
+  global:{vertical:"generic",locale:"us",domainName:"ACME",domainFqdn:"acme.local",sidBase:"S-1-5-21-3298745201-1587429463-2190384756",tenantId:"a1b2c3d4-e5f6-7890-abcd-ef1234567890",historyMonths:2,scanFreqDays:14,richActivityTimeline:0,batchOffset:0,activityPattern:{enabled:false,workStart:9,workEnd:17,lunchDip:true,nightActivity:false,weekendActivity:false}},
   ad:{enabled:true,userCount:200,groupCount:60,departments:[
     {name:"IT",weight:12,subs:["Infrastructure","Security","Development","Help Desk"]},
     {name:"Finance",weight:10,subs:["Accounting","Treasury","Audit"]},
@@ -689,7 +971,31 @@ const DEFAULT_CONFIG = {
     {name:"PIPEDA",region:"CA",terms:["Canadian SIN","Canadian Passport","Canadian Health Card","Canadian Driver License"],enabled:false},
     {name:"LGPD",region:"BR",terms:["Brazilian CPF","Brazilian RG","Brazilian CNPJ","Brazilian Voter ID"],enabled:false},
     {name:"Legal",region:"Global",terms:["Contract Number","NDA Reference","Patent Number","Case Number","Attorney-Client Privilege","Court Order"],enabled:true}
-  ]},
+  ],
+  // v3.0.1: MIP Labels (Microsoft Information Protection) — link sensitive data types to MIP sensitivity labels
+  mipLabels:{
+    enabled:true,
+    labels:[
+      {id:"public",name:"Public",description:"Anyone can access. No sensitivity classification required.",priority:0,color:"#22c55e"},
+      {id:"internal",name:"Internal",description:"For internal use only. Default classification for most content.",priority:1,color:"#3b82f6"},
+      {id:"confidential",name:"Confidential",description:"Sensitive information requiring protection. Limited distribution.",priority:2,color:"#f59e0b"},
+      {id:"highly_confidential",name:"Highly Confidential",description:"Most sensitive data. Encryption + access controls required.",priority:3,color:"#ef4444"}
+    ],
+    // Map AA26 data type IDs (hardcoded by AA26 backend) → our label IDs
+    mappings:{
+      ccpa:"confidential",
+      cmmc:"highly_confidential",
+      credentials:"highly_confidential",
+      financial_records:"confidential",
+      gdpr:"confidential",
+      gdpr_restricted:"highly_confidential",
+      glba:"confidential",
+      hipaa:"highly_confidential",
+      pci_dss:"highly_confidential",
+      phi:"highly_confidential",
+      pii:"confidential"
+    }
+  }},
   rehydration:{enabled:true,frequency:"daily",windowDays:180}
 };
 
@@ -706,8 +1012,13 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
   const users=[];
   if(cfg.ad.enabled){
     onProgress&&onProgress("[Phase 1/5] Generating AD users...");await tick();const used=new Set(),tw=cfg.ad.departments.reduce((s,d)=>s+d.weight,0);
+    // v3.1.0: Pull name pool, offices, phone format from current locale (region) — falls back to US if locale missing
+    const _loc = getLocale(cfg);
+    const _firsts = _loc.firstNames, _lasts = _loc.lastNames;
+    const _offices = _loc.offices || [["HQ","100 Innovation Drive","Austin","TX","78701","US"]];
+    const _phonePrefix = _loc.phonePrefix || '+1';
     for(let i=0;i<cfg.ad.userCount;i++){let r=Math.random()*tw,dept=cfg.ad.departments[0];for(const d of cfg.ad.departments){r-=d.weight;if(r<=0){dept=d;break;}}
-    let sam,f,l;do{f=pick(FIRST_NAMES);l=pick(LAST_NAMES);sam=`${f[0].toLowerCase()}${l.toLowerCase()}`;}while(used.has(sam));used.add(sam);
+    let sam,f,l;do{f=pick(_firsts);l=pick(_lasts);sam=`${normalizeNamePart(f).charAt(0)}${normalizeNamePart(l)}`;}while(used.has(sam));used.add(sam);
     const sub=pick(dept.subs),g=uuid(),s=nextSid(),da=30+Math.floor(Math.random()*1800),cr=new Date(now-da*864e5),ch=new Date(cr.getTime()+Math.random()*da*864e5);
     const dn=`CN=${f} ${l},OU=${sub},OU=${dept.name},DC=${cfg.global.domainFqdn.split(".")[0]},DC=${cfg.global.domainFqdn.split(".")[1]}`;
     const en=Math.random()>.03, isAdmin=i<cfg.ad.risks.adminCount;
@@ -718,13 +1029,12 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     const lastLogon=isStale?new Date(now-(91+Math.floor(Math.random()*274))*864e5):isNoLogon?null:new Date(now-Math.floor(Math.random()*30)*864e5);
     const pwdLastSet=isOldPwd?new Date(now-(91+Math.floor(Math.random()*600))*864e5):new Date(now-Math.floor(Math.random()*89)*864e5);
     const uac=en?(isPNE?66048:512):514;
-    // Personal data
-    const OFFICES=[["HQ","100 Innovation Drive","Austin","TX","78701","US"],["NYC","350 5th Avenue","New York","NY","10118","US"],["SFO","101 Market Street","San Francisco","CA","94105","US"],["LON","30 Finsbury Square","London","","EC2A 1AG","GB"],["CHI","233 S Wacker Drive","Chicago","IL","60606","US"]];
+    // Personal data — uses regional offices and phone prefix
     const TITLES={IT:["Systems Administrator","Network Engineer","Security Analyst","DevOps Engineer","IT Manager","Help Desk Technician","Cloud Architect"],Finance:["Financial Analyst","Controller","Accountant","Accounts Payable Specialist","Treasury Analyst","Compliance Officer"],"Human Resources":["HR Business Partner","Recruiter","Benefits Coordinator","Training Specialist","HR Director","Compensation Analyst"],Sales:["Account Executive","Sales Manager","Business Development Rep","Sales Engineer","VP of Sales","Regional Sales Director"],Engineering:["Software Engineer","Senior Developer","QA Engineer","Engineering Manager","Principal Architect","Tech Lead"],Legal:["Corporate Counsel","Legal Assistant","Compliance Manager","Contract Specialist","General Counsel"],Operations:["Operations Manager","Supply Chain Analyst","Facilities Coordinator","Procurement Specialist","Operations Director"],Executive:["Chief Executive Officer","Chief Financial Officer","Chief Technology Officer","VP of Strategy","Chief Operating Officer"],Research:["Research Scientist","Data Analyst","Lab Manager","Research Director","Biostatistician"],"Customer Support":["Support Engineer","Customer Success Manager","Technical Writer","Support Team Lead","Escalation Manager"]};
-    const office=pick(OFFICES);
+    const office=pick(_offices);
     const jobTitle=TITLES[dept.name]?pick(TITLES[dept.name]):(sub||dept.name+" Specialist");
-    const phone=`+1-${office[3]==="GB"?"20":String(200+Math.floor(Math.random()*800))}-${String(100+Math.floor(Math.random()*900))}-${String(1000+Math.floor(Math.random()*9000))}`;
-    const mobile=`+1-${String(200+Math.floor(Math.random()*800))}-${String(100+Math.floor(Math.random()*900))}-${String(1000+Math.floor(Math.random()*9000))}`;
+    const phone=`${_phonePrefix}-${String(20+Math.floor(Math.random()*80))}-${String(100+Math.floor(Math.random()*900))}-${String(1000+Math.floor(Math.random()*9000))}`;
+    const mobile=`${_phonePrefix}-${String(60+Math.floor(Math.random()*40))}-${String(100+Math.floor(Math.random()*900))}-${String(1000+Math.floor(Math.random()*9000))}`;
     const officeRoom=`${office[0]}-${String.fromCharCode(65+Math.floor(Math.random()*6))}${100+Math.floor(Math.random()*900)}`;
     const badPwdCount=Math.random()<0.05?Math.floor(Math.random()*5):0;
     users.push({g,s,sam,f,l,dn,dept:dept.name,sub,en,cr:crDate.toISOString().replace("T"," ").slice(0,19),ch:ch.toISOString().replace("T"," ").slice(0,19),adm:isAdmin,
@@ -811,7 +1121,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     // Build SQL rows for all scans
     onProgress&&onProgress("Building AD SQL rows...");
     for(const sc of tl){
-      const userRows=users.map(u=>`('${sc.sid}','${sc.eid}','${sc.ts}','${u.g}','${u.s}','${esc(u.dn)}','${u.sam}','${u.sam}@${cfg.global.domainFqdn}','${u.f} ${u.l}','${u.f}','${u.l}',${u.en},'${u.cr}','${u.ch}','${esc(u.dept)} - ${esc(u.sub)}',${u.adm?1:0},513,'${cfg.global.domainName}','${cfg.global.domainFqdn}','${u.f} ${u.l}','${u.f.toLowerCase()}.${u.l.toLowerCase()}@${cfg.global.domainFqdn}','${esc(u.phone)}','${esc(u.mobile)}','${esc(u.officeRoom)}','${esc(u.street)}','${esc(u.city)}','${esc(u.state)}','${esc(u.zip)}','${u.country}','${esc(u.jobTitle)}','${esc(u.dept)}','${cfg.global.domainName}',NULL,'E${10000+users.indexOf(u)}',${u.uac},'${u.pwdLastSet}',${u.pne},${u.lastLogon?"'"+u.lastLogon+"'":"NULL"},${u.lastLogon?"'"+u.lastLogon+"'":"NULL"},${u.badPwdCount},false,false)`);
+      const userRows=users.map(u=>`('${sc.sid}','${sc.eid}','${sc.ts}','${u.g}','${u.s}','${esc(u.dn)}','${u.sam}','${u.sam}@${cfg.global.domainFqdn}','${u.f} ${u.l}','${u.f}','${u.l}',${u.en},'${u.cr}','${u.ch}','${esc(u.dept)} - ${esc(u.sub)}',${u.adm?1:0},513,'${cfg.global.domainName}','${cfg.global.domainFqdn}','${u.f} ${u.l}','${normalizeNamePart(u.f)}.${normalizeNamePart(u.l)}@${cfg.global.domainFqdn}','${esc(u.phone)}','${esc(u.mobile)}','${esc(u.officeRoom)}','${esc(u.street)}','${esc(u.city)}','${esc(u.state)}','${esc(u.zip)}','${u.country}','${esc(u.jobTitle)}','${esc(u.dept)}','${cfg.global.domainName}',NULL,'E${10000+users.indexOf(u)}',${u.uac},'${u.pwdLastSet}',${u.pne},${u.lastLogon?"'"+u.lastLogon+"'":"NULL"},${u.lastLogon?"'"+u.lastLogon+"'":"NULL"},${u.badPwdCount},false,false)`);
       R[`adu_${sc.sid.slice(0,6)}`]={table:"active_directory_user",cols:"scan_id,scan_execution_id,scanned_at,object_guid,object_sid,distinguished_name,sam_account_name,user_principal_name,display_name,given_name,surname,enabled,when_created,when_changed,description,admin_count,primary_group_id,domain_name,domain_canonical_name,cn,mail,telephone_number,mobile,office,street_address,city,state,postal_code,country,job_title,department,company,manager_dn,employee_id,user_account_control,password_last_set,password_never_expires,last_logon,last_logon_timestamp,bad_pwd_count,is_deleted,hard_delete",rows:userRows};
 
       const groupRows=groups.map(g=>`('${sc.sid}','${sc.eid}','${sc.ts}','${g.g}','${g.s}','${esc(g.dn)}','${esc(g.name)}','${esc(g.name)}','${g.scope}','${g.type}',0,NULL,'${cfg.global.domainName}','${cfg.global.domainFqdn}','${esc(g.name)}',NULL,false,false)`);
@@ -1094,7 +1404,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     }
     // SITE entry — one per site, repeated per scan
     const siteItemId=uuid();
-    const ownerEmail=siteOwner?`${siteOwner.f.toLowerCase()}.${siteOwner.l.toLowerCase()}@${cfg.global.domainFqdn}`:'admin@acme.local';
+    const ownerEmail=siteOwner?`${normalizeNamePart(siteOwner.f)}.${normalizeNamePart(siteOwner.l)}@${cfg.global.domainFqdn}`:'admin@acme.local';
     const siteCreated=new Date(now-Math.floor(Math.random()*730)*864e5).toISOString().replace("T"," ").slice(0,19);
     const siteModified=new Date(now-Math.floor(Math.random()*365)*864e5).toISOString().replace("T"," ").slice(0,19);
     for(const sc of tl)spO.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${siteHost}','${siteId}','${siteItemId}','${esc(site.url)}','','','SITE','${esc(site.name)}','','${esc(new URL(site.url).pathname||"/")}',0,'${siteCreated}','${uuid()}','${ownerEmail}','${siteModified}','${uuid()}','${ownerEmail}','','SUCCESS','',true)`);
@@ -1113,7 +1423,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     // Required so spo_documents_with_site_ids can join activity events to documents.
     const driveItemId=uuid();
     site._v1DriveItems[_li].push(driveItemId); // V2.6.12: share with v2 entity generation
-    const auth=siteUserPool.length?pick(siteUserPool):null;const authEmail=auth?`${auth.f.toLowerCase()}.${auth.l.toLowerCase()}@${cfg.global.domainFqdn}`:'user@acme.local';const authName=auth?`${auth.f} ${auth.l}`:'User';const authSid=auth?auth.s:'S-1-5-21-0-0-0-0';
+    const auth=siteUserPool.length?pick(siteUserPool):null;const authEmail=auth?`${normalizeNamePart(auth.f)}.${normalizeNamePart(auth.l)}@${cfg.global.domainFqdn}`:'user@acme.local';const authName=auth?`${auth.f} ${auth.l}`:'User';const authSid=auth?auth.s:'S-1-5-21-0-0-0-0';
     // V2.6.10: SPO v1 doc date generation — bias 30% stale (>365 days) for ROT Stale report
     const spoStaleRoll=Math.random();
     const spoModDays=spoStaleRoll<0.30?(365+Math.floor(Math.random()*730)):spoStaleRoll<0.55?(90+Math.floor(Math.random()*275)):(1+Math.floor(Math.random()*89));
@@ -1126,7 +1436,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     for(const sc of tl)spO.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${siteHost}','${siteId}','${dId}','${esc(site.url)}','${driveId}','${driveItemId}','LIST_ITEM','${esc(dn)}','${ext}','${esc(lib+"/"+dn)}',${spoFileSize},'${spoCreatedTime}','${uuid()}','${authEmail}','${spoModTime}','${uuid()}','${authEmail}','${libItemId}','SUCCESS','',true)`);
     // SPO permissions (every 2nd doc) - uses correlated user pool
     if(i%2===0){const nP=1+Math.floor(Math.random()*3);for(let p=0;p<nP;p++){
-      const pu=siteUserPool.length?pick(siteUserPool):null;const pEmail=pu?`${pu.f.toLowerCase()}.${pu.l.toLowerCase()}@${cfg.global.domainFqdn}`:'user@acme.local';const pName=pu?`${pu.f} ${pu.l}`:'User';
+      const pu=siteUserPool.length?pick(siteUserPool):null;const pEmail=pu?`${normalizeNamePart(pu.f)}.${normalizeNamePart(pu.l)}@${cfg.global.domainFqdn}`:'user@acme.local';const pName=pu?`${pu.f} ${pu.l}`:'User';
       const pType=pick(['USER','GROUP','SITE_USER','SITE_GROUP']);const permLvl=pick(SPO_PERM_LEVELS);const basePerm=pick(SPO_BASE_PERMS);
       const permLvlArr="['"+permLvl.join("','")+"']";const basePermArr="['"+basePerm.join("','")+"']";
       for(const sc of tl)spP.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${esc(siteHost)}','${siteId}','${dId}','${uuid()}','${uuid()}','${uuid()}','${pType}','${esc(pName)}','${pEmail}','DIRECT',${permLvlArr},${basePermArr},'00000')`);
@@ -1323,7 +1633,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
           const isExternalLink = (linkScope==='ANONYMOUS') || Math.random() < 0.30;
           const extDomains=['gmail.com','outlook.com','partner-corp.com','vendor-inc.com','consultant.io','external-audit.com','contractor.net'];
           const creator=users.length?pick(users):null;
-          const creatorEmail=creator?`${creator.f.toLowerCase()}.${creator.l.toLowerCase()}@${cfg.global.domainFqdn}`:'user@acme.local';
+          const creatorEmail=creator?`${normalizeNamePart(creator.f)}.${normalizeNamePart(creator.l)}@${cfg.global.domainFqdn}`:'user@acme.local';
           const creatorName=creator?`${creator.f} ${creator.l}`:'User';
           // For shared_with fields if schema supports them
           const sharedWithEmail = isExternalLink ? `recipient_${Math.floor(Math.random()*500)}@${pick(extDomains)}` : creatorEmail;
@@ -2653,7 +2963,7 @@ async function aa26DeleteServiceAccount(cfg, id) { return await aa26Fetch(cfg, `
 
 // ── AA26 Config: Generate post-setup SQL command for Postgres fixup
 // Dynamically builds kubectl one-liner using real UUIDs from the orchestrator run.
-function aa26GeneratePostSetupSQL(sourceNames, executions, cfg) {
+function aa26GeneratePostSetupSQL(sourceNames, executions, cfg, mipLabelData) {
   // Part 1: Create source groups and link sources
   const sgSQL = sourceNames.map(name =>
     `INSERT INTO source_groups (id,name,description,max_concurrent_scans,status,service_account_id,source_type_id,created_at,updated_at) ` +
@@ -2661,6 +2971,91 @@ function aa26GeneratePostSetupSQL(sourceNames, executions, cfg) {
     `FROM sources s WHERE s.name='${name}' AND NOT EXISTS (SELECT 1 FROM source_groups sg WHERE sg.name='${name}');\n` +
     `UPDATE sources SET source_group_id=sg.id FROM source_groups sg WHERE sources.name='${name}' AND sg.name='${name}' AND sources.source_group_id IS NULL;`
   ).join("\n");
+
+  // Part 1b: v3.0.3 — MIP Labels (synthetic insertion for demo purposes)
+  // Real AA26 pulls these from a connected Entra tenant via Microsoft Graph.
+  // For the demo we INSERT them directly with deterministic UUIDs so the REST PUT
+  // (done in Phase 6 of the orchestrator) can reference them.
+  //
+  // CRITICAL: The MIP SQL is wrapped in its own SAVEPOINT inside the main transaction
+  // so that ANY failure here (unknown column, FK violation, constraint, etc.) only
+  // rolls back the MIP insert — NOT the source group inserts or scan execution UPDATEs.
+  // Without this savepoint, a MIP error would cause executions to keep their API-default
+  // 0 object counts (bug observed in v3.0.2).
+  let mipSQL = "";
+  if (mipLabelData && Array.isArray(mipLabelData.sources) && mipLabelData.sources.length > 0) {
+    const tenantBlocks = mipLabelData.sources.map((src, idx) => {
+      const safeName = src.sourceName.replace(/'/g,"''");
+      const tag = `mip${idx}`;
+      const labelInserts = src.labels.map(lab => `    INSERT INTO mip_labels (id, source_id, label_id, name, priority, metadata, last_synced_at, created_at, updated_at)
+    VALUES (
+      '${lab.uuid}'::uuid,
+      '${src.sourceId}'::uuid,
+      '${lab.id}',
+      '${lab.name.replace(/'/g,"''")}',
+      ${lab.priority||0},
+      '${JSON.stringify({description: lab.description||"", color: lab.color||"#888888"}).replace(/'/g,"''")}'::jsonb,
+      NOW(),
+      NOW(), NOW()
+    )
+    ON CONFLICT (source_id, label_id) DO UPDATE SET
+      id = EXCLUDED.id,
+      name = EXCLUDED.name,
+      priority = EXCLUDED.priority,
+      metadata = EXCLUDED.metadata,
+      last_synced_at = NOW(),
+      updated_at = NOW();`).join("\n");
+
+      return `-- ─── Tenant ${idx+1}/${mipLabelData.sources.length}: ${safeName} (${src.sourceId}) ───
+DO $${tag}$
+DECLARE
+  v_col RECORD;
+  v_count INT;
+BEGIN
+  -- Clean up any orphans from prior runs for this tenant
+  BEGIN
+    DELETE FROM mip_labels WHERE source_id = '${src.sourceId}'::uuid;
+    RAISE NOTICE '[${safeName}] Deleted orphan MIP labels';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE '[${safeName}] Orphan cleanup failed (continuing): %', SQLERRM;
+  END;
+
+  -- Insert/upsert this tenant's labels
+  BEGIN
+${labelInserts}
+    RAISE NOTICE '[${safeName}] inserted/upserted ${src.labels.length} labels';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE '[${safeName}] ⚠ INSERT failed: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
+    -- Dump schema once if something went wrong
+    RAISE NOTICE '--- mip_labels schema (debug) ---';
+    FOR v_col IN
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns
+      WHERE table_name = 'mip_labels'
+      ORDER BY ordinal_position
+    LOOP
+      RAISE NOTICE 'COL: % | type: % | nullable: % | default: %',
+        v_col.column_name, v_col.data_type, v_col.is_nullable, COALESCE(v_col.column_default::text, 'NULL');
+    END LOOP;
+  END;
+
+  -- Verify
+  BEGIN
+    SELECT COUNT(*) INTO v_count FROM mip_labels WHERE source_id = '${src.sourceId}'::uuid;
+    RAISE NOTICE '[${safeName}] verification: % labels present', v_count;
+    FOR v_col IN SELECT id::text AS id_text, label_id, name FROM mip_labels WHERE source_id = '${src.sourceId}'::uuid LOOP
+      RAISE NOTICE '[${safeName}] ROW: % | label_id=% | name=%', v_col.id_text, v_col.label_id, v_col.name;
+    END LOOP;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE '[${safeName}] Verification SELECT failed: %', SQLERRM;
+  END;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE '[${safeName}] DO block outer exception: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
+END $${tag}$;`;
+    }).join("\n\n");
+
+    mipSQL = `-- v3.0.7: MIP Labels for ${mipLabelData.sources.length} Entra tenant(s) — each in own DO block for failure isolation\n${tenantBlocks}`;
+  }
 
   // Part 2: Backdate the API-created execution to be "the latest" AND generate
   // N historical clones spread back over the configured history window.
@@ -2716,9 +3111,24 @@ function aa26GeneratePostSetupSQL(sourceNames, executions, cfg) {
   const totalNewRows = executions.length * histCount;
   const execSQL = `-- Backdating ${executions.length} latest executions + cloning ${totalNewRows} historical executions\n` + sqlLines.join("\n");
 
-  const sql = `BEGIN;\n${sgSQL}\n${execSQL}\nCOMMIT;`;
+  // v3.0.3: MIP SQL runs in its OWN transaction AFTER the main one commits.
+  // This guarantees that any failure (unknown column, FK violation, anything) cannot
+  // roll back the source group inserts or scan execution UPDATEs (the 0-objects bug from v3.0.2).
+  const mainTxn = `BEGIN;\n${sgSQL}\n${execSQL}\nCOMMIT;`;
+  const mipTxn = mipSQL ? `\n-- MIP Labels in a separate transaction so failure here cannot affect the main work above\nBEGIN;\n${mipSQL}\nCOMMIT;` : "";
+  const sql = mainTxn + mipTxn;
   const cmd = `kubectl exec -i postgres-0 -n access-analyzer -- psql -U postgres -d access_analyzer << 'EOSQL'\n${sql}\nEOSQL`;
-  return { sql, cmd, summary: { latestUpdated: executions.length, historicalAdded: totalNewRows, historyDays, scanFreq } };
+  return {
+    sql, cmd,
+    summary: {
+      latestUpdated: executions.length,
+      historicalAdded: totalNewRows,
+      historyDays,
+      scanFreq,
+      mipLabelsInserted: mipLabelData?.sources?.reduce((sum, s) => sum + s.labels.length, 0) || 0,
+      mipTenants: mipLabelData?.sources?.length || 0
+    }
+  };
 }
 
 // ── AA26 Config: Wipe configuration (reverse dependency order)
@@ -2728,14 +3138,54 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   const plan = aa26ConfigPlan(cfg);
   const demoSourceNames = new Set(plan.sources.map(s => s.name));
   const demoScanNames = new Set(plan.scans.map(s => s.name));
-  const stats = { execDel:0, scanDel:0, srcDel:0, sgDel:0, errors:0 };
+  // v3.1.0: tracked IDs from prior inject runs (persisted in cfg.history) — most reliable identification,
+  // survives region/vertical/hostname changes. Falls back to dynamic + hardcoded patterns if state is lost.
+  const trackedSourceIds = new Set(cfg.history?.injectedAA26?.sourceIds || []);
+  const trackedScanIds = new Set(cfg.history?.injectedAA26?.scanIds || []);
+  const trackedSaIds = new Set(cfg.history?.injectedAA26?.serviceAccountIds || []);
+
+  // Dynamic patterns derived from CURRENT cfg — catches user-customized FS hostnames
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const fsShorts = [...new Set((cfg.fs?.hosts||[]).map(h => (h.hostname||'').split('.')[0]).filter(Boolean))];
+  const dynamicFsSourcePatterns = fsShorts.map(h => new RegExp(`^Windows FS - ${escapeRe(h)}(\\..+)?$`));
+  const dynamicFsScanPatterns = fsShorts.flatMap(h => [
+    new RegExp(`^Windows FS - ${escapeRe(h)}(\\..+)? - Sync$`),
+    new RegExp(`^Windows FS - ${escapeRe(h)}(\\..+)? - Access Scan$`),
+    new RegExp(`^Windows FS - ${escapeRe(h)}(\\..+)? - Sensitive Data Scan$`),
+  ]);
+
+  // Hardcoded fallback patterns — catches legacy defaults + standard naming conventions
+  // across all regions/verticals
+  const DEMO_SOURCE_PATTERNS = [
+    /^CloudLab AD - dc01$/,
+    /^Windows FS - fs01(\..+)?$/,
+    /^Windows FS — Local Users & Groups$/,
+    /^.+ Entra ID$/,                                 // matches any domain prefix
+    /^.+ SPO$/,                                      // matches any domain prefix
+    ...dynamicFsSourcePatterns,
+  ];
+  const DEMO_SCAN_PATTERNS = [
+    /^CloudLab AD - dc01 - Identity Sync$/,
+    /^.+ Entra ID - Sync$/,
+    /^Windows FS - fs01(\..+)? - Sync$/,
+    /^Windows FS — Local Users & Groups - Sync$/,
+    /^Windows FS - fs01(\..+)? - Access Scan$/,
+    /^Windows FS - fs01(\..+)? - Sensitive Data Scan$/,
+    /^.+ SPO - Access Scan$/,
+    /^.+ SPO - Sensitive Data Scan$/,
+    ...dynamicFsScanPatterns,
+  ];
+  // Three-layer predicate: tracked ID (precise) > exact name (current cfg) > pattern (legacy + customized)
+  const isDemoSource = (s) => trackedSourceIds.has(s.id) || demoSourceNames.has(s.name) || DEMO_SOURCE_PATTERNS.some(p => p.test(s.name));
+  const isDemoScan = (s) => trackedScanIds.has(s.id) || demoScanNames.has(s.name) || DEMO_SCAN_PATTERNS.some(p => p.test(s.name));
+  const stats = { execDel:0, scanDel:0, srcDel:0, sgDel:0, errors:0, trackedSrcUsed:0, trackedScanUsed:0 };
   const isAll = mode === "all";
-  log(isAll ? "Mode: FULL — wiping ALL configuration content" : "Mode: DEMO — wiping demo-created items only");
+  log(isAll ? "Mode: FULL — wiping ALL configuration content" : `Mode: DEMO — identifying via ${trackedSourceIds.size} tracked source IDs + name patterns (region/hostname-resilient)`);
 
   // Phase 1: Delete scan executions
   log("→ Wiping scan executions...");
   const allScans = await aa26GetScans(cfg);
-  const targetScans = isAll ? allScans : allScans.filter(s => demoScanNames.has(s.name));
+  const targetScans = isAll ? allScans : allScans.filter(s => { const m = isDemoScan(s); if (m && trackedScanIds.has(s.id)) stats.trackedScanUsed++; return m; });
   for (const scan of targetScans) {
     const execs = await aa26GetScanExecutions(cfg, scan.id);
     for (const ex of execs) {
@@ -2749,17 +3199,17 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   log("→ Wiping scans...");
   for (const scan of targetScans) {
     const r = await aa26DeleteScan(cfg, scan.id);
-    if (r.ok || r.status === 204) { log(`  ✓ Deleted scan "${scan.name}"`); stats.scanDel++; }
+    if (r.ok || r.status === 204) { log(`  ✓ Deleted scan "${scan.name}"${trackedScanIds.has(scan.id)?' [tracked]':''}`); stats.scanDel++; }
     else { log(`  ✗ Failed to delete scan "${scan.name}": HTTP ${r.status}`); stats.errors++; }
   }
 
   // Phase 3: Delete sources
   log("→ Wiping sources...");
   const allSources = await aa26GetSources(cfg);
-  const targetSources = isAll ? allSources : allSources.filter(s => demoSourceNames.has(s.name));
+  const targetSources = isAll ? allSources : allSources.filter(s => { const m = isDemoSource(s); if (m && trackedSourceIds.has(s.id)) stats.trackedSrcUsed++; return m; });
   for (const src of targetSources) {
     const r = await aa26DeleteSource(cfg, src.id);
-    if (r.ok || r.status === 204) { log(`  ✓ Deleted source "${src.name}"`); stats.srcDel++; }
+    if (r.ok || r.status === 204) { log(`  ✓ Deleted source "${src.name}"${trackedSourceIds.has(src.id)?' [tracked]':''}`); stats.srcDel++; }
     else { log(`  ✗ Failed to delete source "${src.name}": HTTP ${r.status}`); stats.errors++; }
   }
 
@@ -2767,7 +3217,7 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   log("→ Wiping source groups...");
   const sgResp = await aa26Fetch(cfg, "/api/v1/source-groups?per_page=100");
   const allSGs = sgResp.ok ? (sgResp.body.data || []) : [];
-  const targetSGs = isAll ? allSGs : allSGs.filter(sg => demoSourceNames.has(sg.name) || demoScanNames.has(sg.name));
+  const targetSGs = isAll ? allSGs : allSGs.filter(sg => isDemoSource(sg) || isDemoScan(sg));
   for (const sg of targetSGs) {
     const r = await aa26DeleteSourceGroup(cfg, sg.id);
     if (r.ok || r.status === 204) { log(`  ✓ Deleted source group "${sg.name}"`); stats.sgDel++; }
@@ -2789,8 +3239,62 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
     }
   }
 
+  // v3.0.2 — Phase 6: Reset MIP Label configuration + emit cleanup SQL
+  // The REST API call resets the sensitive-data-config row. The DELETE statements
+  // are emitted as a kubectl command the user runs to clean up the mip_labels table.
+  log("");
+  log("→ Resetting MIP Label configuration...");
+  try {
+    const dataTypeIds = ['ccpa','cmmc','credentials','financial_records','gdpr','gdpr_restricted','glba','hipaa','pci_dss','phi','pii'];
+    const resetBody = {
+      ocr_enabled: false,
+      enabled_data_types: dataTypeIds,
+      mip_entra_source_id: null,
+      data_type_mappings: dataTypeIds.map(id => ({data_type_id: id, enabled: true, mip_label_id: null})),
+      label_behavior: { allow_downgrade: false, allow_overwrite: false, clear_if_not_sensitive: false }
+    };
+    const r = await fetch(`${cfg.connection.url}/api/v1/sensitive-data-config`, {
+      method: 'PUT', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(resetBody)
+    });
+    if (r.ok) {
+      log(`  ✓ Cleared mip_entra_source_id + all label mappings via REST API`);
+      stats.mipReset = 1;
+    } else {
+      log(`  ✗ PUT sensitive-data-config returned HTTP ${r.status} (config may already be empty)`);
+    }
+  } catch (e) {
+    log(`  ⊘ Could not reset MIP config: ${e.message}`);
+  }
+
+  // Generate cleanup SQL for the mip_labels table — the user must run this via kubectl
+  // (Demo mode: labels for ALL Entra sources we know about. Full mode: all rows.)
+  // v3.0.7: multi-tenant — find ALL Entra sources, not just the first.
+  const allSourcesForWipe = await aa26GetSources(cfg);
+  const entraSourcesForWipe = allSourcesForWipe.filter(s => {
+    const t = (s.sourceTypeName || s.source_type_name || s.sourceType?.name || s.source_type?.name || '').toLowerCase();
+    return t.includes('entra') || t.includes('azure');
+  });
+  let deleteWhere = null;
+  if (isAll) {
+    deleteWhere = "1=1";
+  } else if (entraSourcesForWipe.length > 0) {
+    const idList = entraSourcesForWipe.map(s => `'${s.id}'::uuid`).join(", ");
+    deleteWhere = `source_id IN (${idList})`;
+  }
+  if (deleteWhere) {
+    const wipeSql = `BEGIN;\nDELETE FROM mip_labels WHERE ${deleteWhere};\nCOMMIT;`;
+    stats.mipWipeCmd = `kubectl exec -i postgres-0 -n access-analyzer -- psql -U postgres -d access_analyzer << 'EOSQL'\n${wipeSql}\nEOSQL`;
+    const tenantCount = isAll ? "all tenants" : `${entraSourcesForWipe.length} tenant${entraSourcesForWipe.length===1?"":"s"}`;
+    log(`  📋 ${isAll?"Full":"Demo"} MIP label cleanup SQL generated (covers ${tenantCount})`);
+  } else {
+    log(`  ⊘ No Entra source found — no MIP labels to clean up from mip_labels table`);
+  }
+
   log("");
   log(`Done. Deleted: ${stats.execDel} executions, ${stats.scanDel} scans, ${stats.srcDel} sources, ${stats.sgDel} source groups${isAll?`, ${stats.saDel} service accounts`:""}`);
+  if (stats.mipReset) log(`      MIP config reset via REST. Run the kubectl command below to also clear ${isAll?"all":"demo"} MIP labels.`);
   if (!isAll) log("Note: Service accounts preserved in Demo mode. Use Full Reset to remove them.");
   if (stats.errors > 0) log(`⚠ ${stats.errors} errors — review log above`);
   return stats;
@@ -2869,9 +3373,24 @@ function aa26ConfigPlan(cfg) {
 }
 
 // Orchestrates the full config: creates SAs, then Sources, then Scans, with idempotency
+// v3.0.9: Format a duration in milliseconds as "Xh Ym Zs" / "Ym Zs" / "Zs" — used for phase timing
+function fmtPhaseDuration(ms) {
+  if (ms == null || isNaN(ms)) return "—";
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 async function aa26RunFullConfig(cfg, log) {
   const plan = aa26ConfigPlan(cfg);
   const stats = { saCreated: 0, saSkipped: 0, srcCreated: 0, srcSkipped: 0, scnCreated: 0, scnSkipped: 0, errors: 0 };
+  // v3.1.0: track every created/touched ID so the wipe can identify demo-managed items by UUID
+  // regardless of name/region/hostname customizations between inject and wipe.
+  const createdIds = { serviceAccountIds: [], sourceIds: [], scanIds: [] };
 
   // ── Service Accounts
   log(`→ Phase 1/5: Service Accounts (${plan.serviceAccounts.length})`);
@@ -2879,28 +3398,32 @@ async function aa26RunFullConfig(cfg, log) {
   const saNameToId = {};
   existingSAs.forEach(s => { saNameToId[s.name] = s.id; });
   for (const sa of plan.serviceAccounts) {
-    if (saNameToId[sa.name]) { log(`  ⊘ Service Account "${sa.name}" exists (${saNameToId[sa.name]})`); stats.saSkipped++; continue; }
+    if (saNameToId[sa.name]) { log(`  ⊘ Service Account "${sa.name}" exists (${saNameToId[sa.name]})`); createdIds.serviceAccountIds.push(saNameToId[sa.name]); stats.saSkipped++; continue; }
     const r = await aa26CreateServiceAccount(cfg, sa);
-    if (r.ok) { saNameToId[sa.name] = r.body.id; log(`  ✓ Created "${sa.name}" (${r.body.id})`); stats.saCreated++; }
+    if (r.ok) { saNameToId[sa.name] = r.body.id; createdIds.serviceAccountIds.push(r.body.id); log(`  ✓ Created "${sa.name}" (${r.body.id})`); stats.saCreated++; }
     else { log(`  ✗ Failed "${sa.name}": HTTP ${r.status} — ${JSON.stringify(r.body).slice(0,180)}`); stats.errors++; }
   }
 
   // ── Sources
+  // v3.0.9: Time Phase 2 (Sources) — typically the slowest phase along with Phase 4
+  const phase2Start = Date.now();
   log(`→ Phase 2/5: Source Groups (${plan.sources.length})`);
   const existingSrcs = await aa26GetSources(cfg);
   const srcNameToId = {};
   existingSrcs.forEach(s => { srcNameToId[s.name] = s.id; });
   for (const src of plan.sources) {
-    if (srcNameToId[src.name]) { log(`  ⊘ Source "${src.name}" exists (${srcNameToId[src.name]})`); stats.srcSkipped++; continue; }
+    if (srcNameToId[src.name]) { log(`  ⊘ Source "${src.name}" exists (${srcNameToId[src.name]})`); createdIds.sourceIds.push(srcNameToId[src.name]); stats.srcSkipped++; continue; }
     const saId = saNameToId[src.serviceAccountName];
     if (!saId) { log(`  ✗ Source "${src.name}": missing service account "${src.serviceAccountName}"`); stats.errors++; continue; }
     const sourceTypeId = AA26_SOURCE_TYPES[src.sourceTypeKey];
     if (!sourceTypeId) { log(`  ✗ Source "${src.name}": unknown source type "${src.sourceTypeKey}"`); stats.errors++; continue; }
     const payload = { name: src.name, sourceTypeId, serviceAccountId: saId, connectionParameters: src.connectionParameters };
     const r = await aa26CreateSource(cfg, payload);
-    if (r.ok) { srcNameToId[src.name] = r.body.id; log(`  ✓ Created "${src.name}" (${r.body.id})`); stats.srcCreated++; }
+    if (r.ok) { srcNameToId[src.name] = r.body.id; createdIds.sourceIds.push(r.body.id); log(`  ✓ Created "${src.name}" (${r.body.id})`); stats.srcCreated++; }
     else { log(`  ✗ Failed "${src.name}": HTTP ${r.status} — ${JSON.stringify(r.body).slice(0,180)}`); stats.errors++; }
   }
+  stats.phase2Ms = Date.now() - phase2Start;
+  log(`  ⏱ Phase 2 completed in ${fmtPhaseDuration(stats.phase2Ms)} (${stats.srcCreated} created, ${stats.srcSkipped} skipped)`);
 
   // ── Scans
   log(`→ Phase 3/5: Scans (${plan.scans.length})`);
@@ -2926,24 +3449,119 @@ async function aa26RunFullConfig(cfg, log) {
   // Create one completed execution per scan to populate the Scan Executions page.
   // Limitations: API forces timestamps to "now" and object counts to 0 (server-side).
   // Status transitions: pending -> running -> completed (validated).
+  // v3.0.9: Time Phase 4 (Scan Executions) — N API calls × 3 state transitions each
+  const phase4Start = Date.now();
   log(`→ Phase 4/5: Scan Executions (${createdScanIds.length} simulated)`);
   stats.execCreated = 0;
   const newExecs = []; // Track newly created execution IDs for Phase 5
   for (const s of createdScanIds) {
-    // Check if executions already exist for this scan
+    // v3.0.1: ALWAYS create a new execution on each orchestrator run.
+    // Previously skipped if executions existed — but that prevented accumulating history
+    // across multiple runs. Now each run adds 1 new "today" execution + N historical clones
+    // (added by Phase 5 SQL), so re-running the orchestrator grows the timeline naturally.
     const existingExecs = await aa26GetScanExecutions(cfg, s.id);
-    if (existingExecs.length > 0) { log(`  ⊘ "${s.name}" already has ${existingExecs.length} execution(s)`); continue; }
+    if (existingExecs.length > 0) log(`  ℹ "${s.name}" has ${existingExecs.length} existing — adding new execution on top`);
     const r = await aa26SimulateExecution(cfg, s.id, s.scan_type);
     if (r.ok) { log(`  ✓ Execution for "${s.name}" (${r.execId})`); stats.execCreated++; newExecs.push({execId:r.execId, name:s.name, scan_type:s.scan_type}); }
     else { log(`  ✗ Execution for "${s.name}": ${r.error}`); stats.errors++; }
   }
+  stats.phase4Ms = Date.now() - phase4Start;
+  log(`  ⏱ Phase 4 completed in ${fmtPhaseDuration(stats.phase4Ms)} (${stats.execCreated} executions created)`);
 
-  // ── Phase 5: Generate post-setup SQL command (source groups + timestamp fixup + multi-execution history)
-  // The AA26 REST API cannot link sources to source groups, backdate timestamps, or insert multiple executions.
+  // ── Phase 6 (v3.0.7): MIP Labels — multi-tenant support
+  // Real AA26 pulls labels from a connected Entra tenant via Microsoft Graph. For demo
+  // purposes, we INSERT synthetic labels via Postgres for EVERY Entra source found,
+  // and configure the sensitive-data-config via REST so the AA26 UI shows them.
+  // The sensitive-data-config row is global (one per AA26 instance), so the PUT uses
+  // the FIRST Entra source as the "primary" tenant. Switching the tenant dropdown in
+  // the AA26 UI re-PUTs mip_entra_source_id — labels for ALL tenants stay valid because
+  // we use the same label_id strings (public/internal/confidential/highly_confidential)
+  // for every tenant.
+  let mipLabelData = null;
+  if (cfg.sd?.mipLabels?.enabled) {
+    const allSources = await aa26GetSources(cfg);
+    const entraSources = allSources.filter(s => {
+      const t = (s.sourceTypeName || s.source_type_name || s.sourceType?.name || s.source_type?.name || '').toLowerCase();
+      return t.includes('entra') || t.includes('azure');
+    });
+    if (entraSources.length === 0) {
+      log(``);
+      log(`→ Phase 6/6: MIP Labels SKIPPED — no Entra source found`);
+      log(`  Enable Identity Sources → Entra ID in Step 2 to use MIP labels.`);
+    } else {
+      // Generate fresh UUIDs PER TENANT (each row in mip_labels needs a unique uuid).
+      // Same label_id strings across all tenants so mappings resolve regardless of which
+      // tenant is active in the dropdown.
+      const sourcesWithLabels = entraSources.map(src => ({
+        sourceId: src.id,
+        sourceName: src.name,
+        labels: (cfg.sd.mipLabels.labels || []).map(lab => ({
+          ...lab,
+          uuid: uuid() // fresh per (tenant × label) — recreated every run
+        }))
+      }));
+      mipLabelData = { sources: sourcesWithLabels };
+
+      // Build data_type_mappings using the user's configured mappings (global, not per-tenant).
+      // v3.0.6 fix: AA26's /api/v1/mip-labels GET returns each label with `id` set to the
+      // label_id STRING ("public", "internal", etc.), NOT the row's UUID primary key.
+      // The frontend matches mappings.mip_label_id against that string id, so we must send
+      // the label_id string here — sending the UUID makes all 11 mappings show as "(removed)".
+      const mappings = cfg.sd.mipLabels.mappings || {};
+      const dataTypeIds = ['ccpa','cmmc','credentials','financial_records','gdpr','gdpr_restricted','glba','hipaa','pci_dss','phi','pii'];
+      const data_type_mappings = dataTypeIds.map(dtId => {
+        const labelKey = mappings[dtId];
+        return { data_type_id: dtId, enabled: true, mip_label_id: labelKey || null };
+      });
+
+      // PUT /api/v1/sensitive-data-config — wires up the GLOBAL mappings + PRIMARY Entra source.
+      // The "primary" tenant is the first Entra source found; user can switch in AA26 UI.
+      const primarySource = entraSources[0];
+      const totalLabelRows = sourcesWithLabels.reduce((sum, s) => sum + s.labels.length, 0);
+      const putBody = {
+        ocr_enabled: false,
+        enabled_data_types: dataTypeIds,
+        mip_entra_source_id: primarySource.id,
+        data_type_mappings,
+        label_behavior: { allow_downgrade: false, allow_overwrite: false, clear_if_not_sensitive: false }
+      };
+      try {
+        const r = await fetch(`${cfg.connection.url}/api/v1/sensitive-data-config`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(putBody)
+        });
+        log(``);
+        log(`→ Phase 6/6: MIP Labels (${entraSources.length} Entra tenant${entraSources.length>1?'s':''})`);
+        if (r.ok) {
+          log(`  ✓ Wired sensitive-data-config to primary tenant "${primarySource.name}" with ${data_type_mappings.length} mappings`);
+          for (const src of sourcesWithLabels) {
+            log(`    • Will insert ${src.labels.length} labels for "${src.sourceName}"`);
+          }
+          log(`  ℹ Switch tenant dropdown in AA26 to see labels for any tenant (all share the same label_id strings)`);
+          log(`  ⚠ Synthetic labels (${totalLabelRows} total rows) will be inserted by the Phase 5 SQL below`);
+          stats.mipConfigured = totalLabelRows;
+          stats.mipTenants = entraSources.length;
+        } else {
+          log(`  ✗ PUT sensitive-data-config failed: HTTP ${r.status}`);
+          mipLabelData = null;
+          stats.errors++;
+        }
+      } catch (e) {
+        log(`  ✗ MIP config error: ${e.message}`);
+        mipLabelData = null;
+        stats.errors++;
+      }
+    }
+  }
+
+  // ── Phase 5: Generate post-setup SQL command (source groups + timestamp fixup + multi-execution history + MIP labels)
+  // The AA26 REST API cannot link sources to source groups, backdate timestamps, insert multiple executions, or insert MIP labels.
   // This generates a kubectl command the user runs on the AA26 server.
   const sourceNamesForGroups = plan.sources.map(s => s.name);
-  if (newExecs.length > 0 || sourceNamesForGroups.length > 0) {
-    const {cmd, summary} = aa26GeneratePostSetupSQL(sourceNamesForGroups, newExecs, cfg);
+  if (newExecs.length > 0 || sourceNamesForGroups.length > 0 || mipLabelData) {
+    const {cmd, summary} = aa26GeneratePostSetupSQL(sourceNamesForGroups, newExecs, cfg, mipLabelData);
     stats.postSetupCmd = cmd;
     log(``);
     log(`→ Phase 5/5: Post-Setup SQL (copy to AA26 server)`);
@@ -2954,15 +3572,28 @@ async function aa26RunFullConfig(cfg, log) {
       log(`    • Insert ${summary.historicalAdded} historical execution clones spread over ${summary.historyDays} days`);
       log(`      (~${Math.round(summary.historicalAdded / summary.latestUpdated)} historical executions per scan @ ${summary.scanFreq}-day intervals)`);
     }
+    if (summary.mipLabelsInserted > 0) {
+      log(`    • Insert ${summary.mipLabelsInserted} synthetic MIP labels across ${summary.mipTenants} Entra tenant${summary.mipTenants>1?'s':''}`);
+    }
     log(`  Use the 📋 Copy button below to copy, then paste on the AA26 server.`);
   }
 
   log(``);
   log(`Done. Service Accounts: ${stats.saCreated} created, ${stats.saSkipped} skipped`);
-  log(`      Sources:          ${stats.srcCreated} created, ${stats.srcSkipped} skipped`);
+  log(`      Sources:          ${stats.srcCreated} created, ${stats.srcSkipped} skipped${stats.phase2Ms!=null?`  (Phase 2: ${fmtPhaseDuration(stats.phase2Ms)})`:""}`);
   log(`      Scans:            ${stats.scnCreated} created, ${stats.scnSkipped} skipped`);
-  log(`      Executions:       ${stats.execCreated} created`);
+  log(`      Executions:       ${stats.execCreated} created${stats.phase4Ms!=null?`  (Phase 4: ${fmtPhaseDuration(stats.phase4Ms)})`:""}`);
+  if (stats.mipConfigured) log(`      MIP Labels:       ${stats.mipConfigured} configured across ${stats.mipTenants||1} tenant${(stats.mipTenants||1)>1?'s':''} (visible after Phase 5 SQL runs)`);
   if (stats.errors > 0) log(`      ⚠ ${stats.errors} errors — review log above`);
+  // v3.0.8: expose the newly-created execution IDs so the UI can poll-verify Phase 5 SQL application
+  stats.newExecIds = newExecs.map(e => e.execId);
+  // v3.1.0: deduplicate tracked IDs (skipped pre-existing + newly-created may overlap)
+  // Also merge in scan IDs from createdScanIds since that loop was already tracking them
+  stats.createdIds = {
+    serviceAccountIds: [...new Set(createdIds.serviceAccountIds)],
+    sourceIds: [...new Set(createdIds.sourceIds)],
+    scanIds: [...new Set([...createdIds.scanIds, ...createdScanIds.map(s => s.id)])],
+  };
   return stats;
 }
 
@@ -3307,9 +3938,9 @@ function Modal({open,onClose,title,children,t,danger}){
 }
 
 function Tooltip({text,children,t}){
-  return <span className="relative inline-block group">
+  return <span className="relative inline-block group/tooltip">
     {children}
-    <span className={cn("absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none z-30 border",t.bgCard,t.border,t.text)}>{text}</span>
+    <span className={cn("absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded text-[10px] whitespace-normal break-words w-max max-w-xs opacity-0 group-hover/tooltip:opacity-100 transition pointer-events-none z-30 border shadow-lg",t.bgCard,t.border,t.text)}>{text}</span>
   </span>;
 }
 
@@ -3592,38 +4223,106 @@ GRANT analysis_reader TO access_analyzer_metabase`}</pre>
         </div>
 
         <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className={cn("font-semibold mb-2",t.text)}>Step 6: Deploy Demo Data Manager on the AA26 Server</div>
-          <p className={cn(t.textFaint,"mb-2")}>Deploy on the AA26 server for full functionality (auto-authentication, AA26 Configuration API). This creates a lightweight nginx pod serving the HTML at <code className={cn("px-1 rounded",t.codeBlock)}>/demo-manager/</code>.</p>
-          <div className={cn("font-semibold text-xs mb-1",t.text)}>On your workstation — cd to the folder where you saved the downloaded HTML, then copy it to the AA26 server:</div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`cd ~/Downloads   # or wherever demo-data-manager.html is saved
-scp demo-data-manager.html sysadmin@appaa:demo-data-manager
-scp demo-manager.yaml sysadmin@appaa:demo-data-manager`}</pre>
-          <div className={cn("font-semibold text-xs mb-1",t.text)}>On the AA26 server (SSH) — initial install (first time only):</div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`kubectl create configmap demo-manager-html \\
+          <div className={cn("font-semibold mb-2",t.text)}>Step 6: Deploy Demo Data Manager on the AA26 Server (First-Time Install)</div>
+          <p className={cn(t.textFaint,"mb-2")}>Deploy on the AA26 server for full functionality (auto-authentication, AA26 Configuration API). This creates a lightweight nginx pod serving the HTML at <code className={cn("px-1 rounded",t.codeBlock)}>/demo-manager/</code>. <b>Use this section once per AA26 lab.</b></p>
+
+          <div className={cn("p-2 rounded mb-2 border",t.accentBg,t.accentBorder)}>
+            <div className={cn("font-semibold text-xs mb-1",t.accent)}>📦 What you need on your workstation</div>
+            <ul className={cn("text-xs ml-4 list-disc",t.text)}>
+              <li><code className={cn("px-1 rounded",t.codeBlock)}>demo-data-manager.html</code> — the app itself</li>
+              <li><code className={cn("px-1 rounded",t.codeBlock)}>install-demo-manager.sh</code> — first-time install script</li>
+              <li><code className={cn("px-1 rounded",t.codeBlock)}>update-demo-manager.sh</code> — future updates (copy now so it's there when you need it)</li>
+            </ul>
+          </div>
+
+          <div className={cn("font-semibold text-xs mb-1",t.text)}>On your workstation — copy all three files to the AA26 server:</div>
+          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`ssh sysadmin@appaa "mkdir -p ~/demo-data-manager"
+cd ~/Downloads   # or wherever the files are saved
+scp demo-data-manager.html install-demo-manager.sh update-demo-manager.sh \\
+    sysadmin@appaa:~/demo-data-manager/`}</pre>
+
+          <div className={cn("font-semibold text-xs mb-1",t.text)}>On the AA26 server (SSH) — run the installer:</div>
+          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`ssh sysadmin@appaa
+cd ~/demo-data-manager
+chmod +x install-demo-manager.sh update-demo-manager.sh
+./install-demo-manager.sh`}</pre>
+
+          <div className={cn("p-2 rounded mb-2 border",t.bgInput,t.border)}>
+            <div className={cn("font-semibold text-xs mb-1",t.text)}>What the install script does (~30-60 sec)</div>
+            <ol className={cn("text-xs ml-4 list-decimal",t.textFaint)}>
+              <li>Preflight checks — kubectl reachable, namespace exists, HTML file present</li>
+              <li>Auto-detects Traefik CRD version (<code>traefik.io</code> vs <code>traefik.containo.us</code>)</li>
+              <li>Creates the <code>demo-manager-html</code> ConfigMap from the HTML</li>
+              <li>Applies the Deployment + Service + Middleware + IngressRoute manifest (generated inline)</li>
+              <li>Waits up to 120s for pod readiness, prints the access URL</li>
+            </ol>
+          </div>
+
+          <p className={cn(t.textFaint,"text-xs mb-2")}>When complete, open <code className={cn("px-1 rounded",t.codeBlock)}>{`https://<aa26-host>/demo-manager/`}</code> and hard-refresh (Ctrl-Shift-R). You should see Auto Mode (Same-Origin) enabled.</p>
+
+          <details className={cn("text-xs",t.textFaint)}>
+            <summary className={cn("cursor-pointer font-semibold",t.text)}>▸ Manual install commands (without the script)</summary>
+            <div className="mt-2">
+              <p className="mb-1">If you can't or don't want to run the script, the equivalent manual steps:</p>
+              <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`# 1. Create the ConfigMap from the HTML
+kubectl create configmap demo-manager-html \\
   --from-file=index.html=/home/sysadmin/demo-data-manager/demo-data-manager.html \\
   -n default
-kubectl apply -f /home/sysadmin/demo-data-manager/demo-manager.yaml`}</pre>
-          <p className={cn(t.textFaint,"text-xs mb-2")}>Then open <code className={cn("px-1 rounded",t.codeBlock)}>{`https://<aa26-host>/demo-manager/`}</code> in your browser. You should see Auto Mode (Same-Origin) enabled.</p>
-          <div className={cn("font-semibold text-xs mb-1",t.textFaint)}>Alternative — local workstation (limited, no AA26 Configuration features):</div>
+
+# 2. Apply Deployment + Service + IngressRoute (see Deployment.md for the YAML)
+kubectl apply -f demo-manager-manifest.yaml
+
+# 3. Wait for the pod
+kubectl rollout status deployment/demo-manager -n default --timeout=120s`}</pre>
+              <p>Full YAML manifest reference: <code>AA26-DemoDataManager-Deployment.md</code></p>
+            </div>
+          </details>
+
+          <div className={cn("font-semibold text-xs mb-1 mt-3",t.textFaint)}>Alternative — local workstation (limited, no AA26 Configuration features):</div>
           <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-1",t.codeBlock,t.textFaint)}>{`python3 -m http.server 8080  # then open http://localhost:8080/demo-data-manager.html`}</pre>
         </div>
 
         <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className={cn("font-semibold mb-2",t.text)}>Step 7: Updating the Demo Data Manager</div>
-          <p className={cn(t.textFaint,"mb-2")}>When a new version is released, update the HTML file on the AA26 server:</p>
-          <div className={cn("font-semibold text-xs mb-1",t.text)}>On your workstation — cd to the folder where you downloaded the new HTML, then copy it:</div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`cd ~/Downloads   # or wherever the new demo-data-manager.html is saved
-scp demo-data-manager.html sysadmin@appaa:demo-data-manager`}</pre>
-          <div className={cn("font-semibold text-xs mb-1",t.text)}>On the AA26 server (SSH):</div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`# Check current version on disk
-grep "APP_VERSION" /home/sysadmin/demo-data-manager/demo-data-manager.html
+          <div className={cn("font-semibold mb-2",t.text)}>Step 7: Updating to a New Version</div>
+          <p className={cn(t.textFaint,"mb-2")}>When a new release ships, use the <code className={cn("px-1 rounded",t.codeBlock)}>update-demo-manager.sh</code> script (already on the server from Step 6). Only the HTML file changes — manifest stays untouched.</p>
 
-# Update ConfigMap and restart (use 'replace' not 'apply')
+          <div className={cn("font-semibold text-xs mb-1",t.text)}>On your workstation — copy the new HTML to the server:</div>
+          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`cd ~/Downloads   # or wherever the new demo-data-manager.html is saved
+scp demo-data-manager.html sysadmin@appaa:~/demo-data-manager/`}</pre>
+
+          <div className={cn("font-semibold text-xs mb-1",t.text)}>On the AA26 server — run the update script:</div>
+          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`ssh sysadmin@appaa "cd ~/demo-data-manager && ./update-demo-manager.sh"`}</pre>
+
+          <div className={cn("p-2 rounded mb-2 border",t.bgInput,t.border)}>
+            <div className={cn("font-semibold text-xs mb-1",t.text)}>What the update script does (~10-20 sec)</div>
+            <ol className={cn("text-xs ml-4 list-decimal",t.textFaint)}>
+              <li>Refuses to run if the deployment doesn't exist (redirects you to install script)</li>
+              <li>Shows the version delta (e.g. <code>v3.1.0 → v3.1.1</code>) by comparing the new HTML to what's currently in the ConfigMap</li>
+              <li>Replaces the ConfigMap via <code>kubectl create --dry-run | kubectl replace</code> (sidesteps the 262KB <code>kubectl apply</code> annotation limit)</li>
+              <li>Restarts the pod via <code>kubectl rollout restart</code>, waits up to 60s for readiness</li>
+            </ol>
+          </div>
+
+          <p className={cn(t.textFaint,"text-xs mb-2")}>Hard-refresh your browser (<code className={cn("px-1 rounded",t.codeBlock)}>Ctrl-Shift-R</code> / <code className={cn("px-1 rounded",t.codeBlock)}>Cmd-Shift-R</code>) to load the new version. Confirm by checking the version badge in the top-left of the header.</p>
+
+          <details className={cn("text-xs",t.textFaint)}>
+            <summary className={cn("cursor-pointer font-semibold",t.text)}>▸ Manual update commands (without the script)</summary>
+            <div className="mt-2">
+              <p className="mb-1">If you can't or don't want to run the script:</p>
+              <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`# 1. Check current vs new version
+grep APP_VERSION /home/sysadmin/demo-data-manager/demo-data-manager.html
+kubectl get configmap demo-manager-html -n default -o jsonpath='{.data.index\\.html}' | grep APP_VERSION
+
+# 2. Replace ConfigMap (must use 'replace' not 'apply' — HTML > 262KB)
 kubectl create configmap demo-manager-html \\
   --from-file=index.html=/home/sysadmin/demo-data-manager/demo-data-manager.html \\
   -n default --dry-run=client -o yaml | kubectl replace -f -
-kubectl rollout restart deployment/demo-manager -n default`}</pre>
-          <p className={cn(t.textFaint,"text-xs")}>Hard-refresh your browser (<code className={cn("px-1 rounded",t.codeBlock)}>Ctrl+Shift+R</code>) to see the new version in the header.</p>
+
+# 3. Restart pod to pick up the new HTML
+kubectl rollout restart deployment/demo-manager -n default
+kubectl rollout status deployment/demo-manager -n default --timeout=60s`}</pre>
+            </div>
+          </details>
         </div>
 
         <div className={cn("p-3 rounded border-2 border-emerald-500/40 bg-emerald-500/5")}>
@@ -3943,16 +4642,111 @@ function StepOrg({cfg,setCfg,t,toast}){
   return <div className="space-y-5">
     <SH n={2} title="🏢 Organization & Timeline" t={t}/>
 
+    {/* v3.1.0: Region/Locale picker — region drives names, domains, departments, regulations, company names */}
+    <Card t={t}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className={cn("text-base font-semibold",t.text)}>🌐 Region</span>
+          <HelpIcon text="Drives ALL regionalized data: user first/last names, email domain (TLD), department names, legal-entity suffix, company name (combined with Industry Vertical), and regional regulations added to sensitive-data taxonomies. Pick this BEFORE Industry Vertical." t={t}/>
+          <span className={cn("text-xs",t.textFaint)}>— pick this BEFORE Industry Vertical</span>
+        </div>
+        <span className={cn("text-xs font-semibold",t.accent)}>
+          Active: 🌐 {getLocale(cfg).name}
+        </span>
+      </div>
+      <p className={cn("text-xs mb-3",t.textFaint)}>
+        Selects the regional flavor for every generated artifact. The same Industry Vertical produces different company names, naming conventions, and regulatory frameworks based on the chosen region.
+      </p>
+      <div className="grid grid-cols-4 gap-2">
+        {LOCALE_KEYS.map(key => {
+          const loc = LOCALES[key];
+          const isActive = (cfg.global.locale||'us') === key;
+          return <button
+            key={key}
+            onClick={() => setCfg(prev => applyLocaleChange(prev, key))}
+            className={cn("p-2 rounded-lg border text-left transition", isActive ? cn(t.accentBg, t.borderAccent||t.border, "ring-2 ring-offset-1") : cn(t.bgInput, t.border, "hover:opacity-80"))}>
+            <div className="flex items-center gap-2">
+              <span className="text-base">🌐</span>
+              <span className={cn("text-xs font-semibold",t.text)}>{loc.name}</span>
+            </div>
+            <div className={cn("text-[10px] mt-1",t.textFaint)}>
+              .{loc.emailTlds.slice(0,3).join('/')}  •  {loc.legalSuffixes.slice(0,2).join('/')}
+            </div>
+          </button>;
+        })}
+      </div>
+
+      {/* Region Preview — shows what the chosen locale produces */}
+      <details className={cn("mt-3 rounded-lg",t.bgInput)}>
+        <summary className={cn("p-2 text-xs font-semibold cursor-pointer",t.text)}>
+          🔍 Region Preview — sample names, domain, company name for current vertical
+        </summary>
+        <div className="p-3 pt-1 space-y-2 text-xs">
+          {(() => {
+            const loc = getLocale(cfg);
+            const company = getCompanyName(cfg);
+            const sampleFirst = loc.firstNames.slice(0, 5).join(', ');
+            const sampleLast = loc.lastNames.slice(0, 5).join(', ');
+            const f0 = loc.firstNames[0], l0 = loc.lastNames[0];
+            const sampleSam = `${normalizeNamePart(f0).charAt(0)}${normalizeNamePart(l0)}`;
+            const sampleUpn = `${normalizeNamePart(f0)}.${normalizeNamePart(l0)}@${cfg.global.domainFqdn}`;
+            const samplePhone = `${loc.phonePrefix||'+1'}-${20+Math.floor(Math.random()*80)}-${100+Math.floor(Math.random()*900)}-${1000+Math.floor(Math.random()*9000)}`;
+            const sampleOffice = (loc.offices && loc.offices[0]) ? `${loc.offices[0][1]}, ${loc.offices[0][2]}, ${loc.offices[0][5]}` : '—';
+            return <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Company name (with current vertical "{cfg.global.vertical}")</div>
+                  <div className={cn("font-mono",t.accent)}>{company}</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Sample user — SAM + UPN/email</div>
+                  <div className={cn("font-mono",t.accent)}>{f0} {l0} → {sampleSam}</div>
+                  <div className={cn("font-mono",t.accent)}>{sampleUpn}</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Sample first names ({loc.firstNames.length} in pool)</div>
+                  <div className={t.textFaint}>{sampleFirst}…</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Sample last names ({loc.lastNames.length} in pool)</div>
+                  <div className={t.textFaint}>{sampleLast}…</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>HQ office (of {loc.offices?.length||0})</div>
+                  <div className={t.textFaint}>{sampleOffice}</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Sample phone number</div>
+                  <div className={cn("font-mono",t.textFaint)}>{samplePhone}</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Departments (localized labels)</div>
+                  <div className={t.textFaint}>{Object.values(loc.departments).slice(0,4).join(' • ')}…</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Regional regulations added</div>
+                  <div className={t.textFaint}>{loc.extraRegulations.length ? loc.extraRegulations.join(', ') : '(none — US is the global baseline)'}</div>
+                </div>
+              </div>
+              <div className={cn("text-[10px] italic pt-1 border-t",t.textFaint,t.border)}>
+                ℹ v3.1.0: regional names, offices, phone formats, domain, SPO/FS hostnames, and regulatory taxonomies are fully wired into AD/Entra user generation. Wipe DB + re-inject after region change to see new data.
+              </div>
+            </>;
+          })()}
+        </div>
+      </details>
+    </Card>
+
     {/* V2.6.8: Industry Vertical Selector — sets demo-wide tone */}
     <Card t={t}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={cn("text-base font-semibold",t.text)}>🎯 Industry Vertical</span>
-          <HelpIcon text="Sets the FLAVOR of demo data — departments, file share names, SharePoint sites, OneDrive users, sensitive-data taxonomies, and file naming patterns. Pick this FIRST, then pick a Demo Profile below for SCALE." t={t}/>
-          <span className={cn("text-xs",t.textFaint)}>— pick this FIRST</span>
+          <HelpIcon text="Sets the FLAVOR of demo data — departments, file share names, SharePoint sites, OneDrive users, sensitive-data taxonomies, and file naming patterns. Pick a Region FIRST, then pick this for the industry, then pick a Demo Profile below for SCALE." t={t}/>
+          <span className={cn("text-xs",t.textFaint)}>— pick this AFTER region</span>
         </div>
         <span className={cn("text-xs font-semibold",t.accent)}>
-          Active: {VERTICAL_TEMPLATES[currentVertical].icon} {VERTICAL_TEMPLATES[currentVertical].label}
+          Active: {VERTICAL_TEMPLATES[currentVertical].icon} {VERTICAL_TEMPLATES[currentVertical].label} → {getCompanyName(cfg)}
         </span>
       </div>
       <p className={cn("text-xs mb-3",t.textFaint)}>
@@ -3982,17 +4776,15 @@ function StepOrg({cfg,setCfg,t,toast}){
           );
         })}
       </div>
-      {currentVertical !== 'generic' && (
-        <div className={cn("mt-3 p-2.5 rounded text-xs space-y-1",t.accentBg)}>
-          <div className={t.text}><b>Domain:</b> {cfg.global.domainName} ({cfg.global.domainFqdn})</div>
-          <div className={t.text}>
-            <b>Departments:</b> {cfg.ad.departments.length}
-            &nbsp;|&nbsp; <b>Shares:</b> {cfg.fs.hosts.reduce((s,h)=>s+h.shares.length,0)}
-            &nbsp;|&nbsp; <b>SPO sites:</b> {cfg.spo.tenants.reduce((s,t)=>s+t.sites.length,0)}
-          </div>
-          <div className={t.text}><b>Enabled taxonomies:</b> {cfg.sd.taxonomies.filter(tx=>tx.enabled).map(tx=>tx.name).join(', ')}</div>
+      <div className={cn("mt-3 p-2.5 rounded text-xs space-y-1",t.accentBg)}>
+        <div className={t.text}><b>Domain:</b> {cfg.global.domainName} ({cfg.global.domainFqdn})</div>
+        <div className={t.text}>
+          <b>Departments:</b> {cfg.ad.departments.length}
+          &nbsp;|&nbsp; <b>Shares:</b> {cfg.fs.hosts.reduce((s,h)=>s+h.shares.length,0)}
+          &nbsp;|&nbsp; <b>SPO sites:</b> {cfg.spo.tenants.reduce((s,t)=>s+t.sites.length,0)}
         </div>
-      )}
+        <div className={t.text}><b>Enabled taxonomies:</b> {cfg.sd.taxonomies.filter(tx=>tx.enabled).map(tx=>tx.name).join(', ') || '(none)'}</div>
+      </div>
     </Card>
 
     {/* v3.0 — Demo Profile Templates (scale presets that complement Industry Vertical) */}
@@ -4035,7 +4827,15 @@ function StepOrg({cfg,setCfg,t,toast}){
 
     <Card t={t}>
       <div className="grid grid-cols-2 gap-4">
-        <Input label="Organization Name" value={cfg.global.domainName} onChange={v=>u("domainName",v)} help="Display name used throughout the demo (e.g., ACME). Appears in source names, file paths, and SharePoint URLs." t={t}/>
+        <Input label="Organization Name" value={cfg.global.domainName} onChange={v=>{
+          setCfg(p=>{
+            const oldFqdn = p.global.domainFqdn || '';
+            const firstDot = oldFqdn.indexOf('.');
+            const tld = firstDot >= 0 ? oldFqdn.substring(firstDot + 1) : 'local';
+            const newPrefix = (v||'').toLowerCase().replace(/[^a-z0-9-]/g, '');
+            return {...p, global:{...p.global, domainName: v, domainFqdn: newPrefix ? `${newPrefix}.${tld}` : p.global.domainFqdn}};
+          });
+        }} help="Display name used throughout the demo (e.g., ACME). Appears in source names, file paths, and SharePoint URLs. Editing this auto-updates Domain FQDN prefix below (TLD preserved)." t={t}/>
         <Input label="Domain FQDN" value={cfg.global.domainFqdn} onChange={v=>u("domainFqdn",v)} help="Fully-qualified domain name for Active Directory (e.g., acme.local). Used in user UPNs and group DNs." t={t}/>
         <Input label="Entra Tenant ID" value={cfg.global.tenantId} onChange={v=>u("tenantId",v)} help="Azure AD / Entra ID tenant identifier (GUID format). Demo value works for visualization — real lab uses real tenant ID." t={t}/>
         <Input label="SID Base" value={cfg.global.sidBase} onChange={v=>u("sidBase",v)} help="Active Directory Security Identifier prefix. All generated users/groups use this base. Advanced setting — change only if matching specific demo scenarios." t={t}/>
@@ -4057,8 +4857,9 @@ function StepOrg({cfg,setCfg,t,toast}){
       </div>
       {/* v3.0 — Activity Patterns by Time */}
       <div className="mt-4">
-        <details>
-          <summary className={cn("text-xs font-semibold cursor-pointer select-none flex items-center gap-2",t.text)}>
+        <details className="group/details">
+          <summary className={cn("text-xs font-semibold cursor-pointer select-none flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden",t.text)}>
+            <span className="inline-block transition-transform duration-150 group-open/details:rotate-90 text-[10px]">▶</span>
             ⏰ Activity Patterns by Time
             <HelpIcon text="Make activity events follow realistic business-hour patterns instead of uniform 24/7 distribution. Affects Rich Activity Timeline events (FS and SharePoint)." t={t}/>
             {cfg.global.activityPattern?.enabled && <Badge variant="success" t={t}>ENABLED</Badge>}
@@ -4303,6 +5104,114 @@ function StepSensitiveData({cfg,setCfg,t}){
         <span className={cn("text-xs",t.textFaint)}>AA26 does not currently support custom taxonomy creation — only built-in categories above</span>
       </div>
     </Card>
+
+    {/* v3.0.1: MIP Labels — Microsoft Information Protection label mappings */}
+    <Card t={t}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className={cn("text-base font-semibold",t.text)}>🛡️ MIP Labels (Microsoft Information Protection)</span>
+          <HelpIcon text="MIP labels assign a sensitivity classification (Public / Internal / Confidential / Highly Confidential) to each AA26 data type. Real AA26 deployments pull these from a connected Entra tenant via Microsoft Graph. This tool injects synthetic labels for the demo and wires up the mappings via PUT /api/v1/sensitive-data-config." t={t}/>
+        </div>
+        <Toggle checked={cfg.sd.mipLabels?.enabled||false} onChange={v=>setCfg(p=>({...p,sd:{...p.sd,mipLabels:{...p.sd.mipLabels,enabled:v}}}))} label="Enable MIP Labels" t={t}/>
+      </div>
+      <p className={cn("text-xs mb-3",t.textFaint)}>
+        Defines synthetic MIP labels that will be inserted into AA26's <code className={cn("px-1 rounded",t.codeBlock)}>mip_labels</code> table and linked to data types on the Sensitive Data Configuration page. The Entra demo source must be created (Step 5 → AA26 Config) for these labels to associate correctly.
+      </p>
+
+      {cfg.sd.mipLabels?.enabled && <>
+        {/* Label definitions */}
+        <div className="mb-4">
+          <div className={cn("text-xs font-semibold mb-2",t.text)}>Sensitivity Labels (4 defaults)</div>
+          <div className="grid grid-cols-2 gap-2">
+            {(cfg.sd.mipLabels?.labels||[]).map((lab,i)=><div key={lab.id} className={cn("border rounded-lg p-3 flex items-start gap-2",t.border,t.bgInput)}>
+              <div className="w-3 h-3 rounded-full mt-1 flex-shrink-0" style={{background:lab.color}}/>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <input
+                    type="text"
+                    value={lab.name}
+                    onChange={e=>{
+                      const labels=[...cfg.sd.mipLabels.labels];
+                      labels[i]={...labels[i],name:e.target.value};
+                      setCfg(p=>({...p,sd:{...p.sd,mipLabels:{...p.sd.mipLabels,labels}}}));
+                    }}
+                    className={cn("text-sm font-semibold rounded px-2 py-0.5 border w-full",t.bgCard,t.borderInput,t.text)}/>
+                  <Badge t={t}>P{lab.priority}</Badge>
+                </div>
+                <textarea
+                  value={lab.description}
+                  onChange={e=>{
+                    const labels=[...cfg.sd.mipLabels.labels];
+                    labels[i]={...labels[i],description:e.target.value};
+                    setCfg(p=>({...p,sd:{...p.sd,mipLabels:{...p.sd.mipLabels,labels}}}));
+                  }}
+                  rows={2}
+                  className={cn("text-xs rounded px-2 py-1 border w-full mt-1",t.bgCard,t.borderInput,t.textMuted)}/>
+              </div>
+            </div>)}
+          </div>
+        </div>
+
+        {/* Data type → MIP label mappings */}
+        <div>
+          <div className={cn("text-xs font-semibold mb-2 flex items-center gap-2",t.text)}>
+            Data Type → Label Mappings
+            <HelpIcon text="AA26 has 11 built-in data types. Each can be assigned to one of the MIP labels above. Defaults follow industry-standard sensitivity (e.g., HIPAA + PCI DSS → Highly Confidential)." t={t}/>
+          </div>
+          <div className={cn("rounded-lg border overflow-hidden",t.border)}>
+            <table className="w-full text-xs">
+              <thead className={t.bgInput}>
+                <tr>
+                  <th className={cn("text-left px-3 py-2",t.textFaint)}>Data Type</th>
+                  <th className={cn("text-left px-3 py-2",t.textFaint)}>Description</th>
+                  <th className={cn("text-left px-3 py-2",t.textFaint)}>MIP Label</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ['ccpa','CCPA','California Consumer Privacy Act'],
+                  ['cmmc','CMMC','Cybersecurity Maturity Model Certification'],
+                  ['credentials','Credentials','Passwords, API keys, tokens'],
+                  ['financial_records','Financial Records','Banking and financial data'],
+                  ['gdpr','GDPR','General Data Protection Regulation'],
+                  ['gdpr_restricted','GDPR Restricted','Highly sensitive GDPR data'],
+                  ['glba','GLBA','Gramm-Leach-Bliley Act'],
+                  ['hipaa','HIPAA','Health Insurance Portability Act'],
+                  ['pci_dss','PCI DSS','Payment Card Industry'],
+                  ['phi','PHI','Protected Health Information'],
+                  ['pii','PII','Personally Identifiable Information']
+                ].map(([id,name,desc])=>{
+                  const currentLabel = cfg.sd.mipLabels?.mappings?.[id] || '';
+                  const labelObj = (cfg.sd.mipLabels?.labels||[]).find(l=>l.id===currentLabel);
+                  return <tr key={id} className={cn("border-t",t.border)}>
+                    <td className={cn("px-3 py-2 font-semibold",t.text)}>{name}</td>
+                    <td className={cn("px-3 py-2",t.textFaint)}>{desc}</td>
+                    <td className={cn("px-3 py-2")}>
+                      <div className="flex items-center gap-2">
+                        {labelObj && <div className="w-2 h-2 rounded-full flex-shrink-0" style={{background:labelObj.color}}/>}
+                        <select
+                          value={currentLabel}
+                          onChange={e=>{
+                            const mappings={...(cfg.sd.mipLabels?.mappings||{}),[id]:e.target.value};
+                            setCfg(p=>({...p,sd:{...p.sd,mipLabels:{...p.sd.mipLabels,mappings}}}));
+                          }}
+                          className={cn("text-xs rounded px-2 py-1 border",t.bgCard,t.borderInput,t.text)}>
+                          <option value="">— No Label —</option>
+                          {(cfg.sd.mipLabels?.labels||[]).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+                        </select>
+                      </div>
+                    </td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className={cn("text-[10px] mt-2 italic",t.textFaint)}>
+            ℹ Mappings apply after running "Step 5 → Run AA26 Config" + the Phase 5 Post-Setup SQL. The orchestrator inserts synthetic labels into Postgres and PUTs the sensitive-data-config to wire up the mappings.
+          </div>
+        </div>
+      </>}
+    </Card>
   </div>;
 }
 
@@ -4344,6 +5253,10 @@ function StepGenerate({cfg,setCfg,onGenerate,results,progress,generating,t,injec
   const [showWipeModal,setShowWipeModal]=useState(false); // For ClickHouse wipe
   const [showFullResetModal,setShowFullResetModal]=useState(false);
   const [aa26PostSetupCmd,setAa26PostSetupCmd]=useState(null);
+  // v3.0.8: Phase 5 SQL application verification
+  const [phase5PendingIds,setPhase5PendingIds]=useState([]); // execution IDs that should have totalObjects>0 after SQL runs
+  const [phase5Status,setPhase5Status]=useState(null); // null | 'pending' | 'verifying' | 'applied' | 'partial'
+  const [phase5VerifyDetails,setPhase5VerifyDetails]=useState(null); // {applied:N, total:N, sample:[...]}
   const [aa26WipeBusy,setAa26WipeBusy]=useState(false);
   const [aa26WipeLog,setAa26WipeLog]=useState([]);
   const [aa26WipeConfirm,setAa26WipeConfirm]=useState(false);
@@ -4494,7 +5407,7 @@ echo "Refresh the AA26 dashboards to see the data."
                 <span><b>Full Reset</b> — ALL source groups, sources, scans, executions & service accounts</span>
               </label>
             </div>
-            <p className={cn("text-[10px]",t.textFaint)}>{aa26WipeMode==="all"?"Deletes ALL configuration content including service accounts for a completely clean slate.":"Deletes only items matching the current config plan (domain: "+( cfg.global?.domainName||"demo")+"). Service accounts preserved. Won't catch items from previous runs with different domains."}</p>
+            <p className={cn("text-[10px]",t.textFaint)}>{aa26WipeMode==="all"?"Deletes ALL configuration content including service accounts for a completely clean slate.":`Deletes items identified by (a) ${(cfg.history?.injectedAA26?.sourceIds||[]).length} tracked source IDs from prior inject runs, (b) current cfg's expected names, (c) standard demo name patterns across any region/vertical. Service accounts preserved.`}</p>
             <div className="flex items-center gap-2">
               <button onClick={()=>setAa26WipeConfirm(true)} disabled={aa26WipeBusy||aa26ConfigBusy} className={cn("text-xs px-3 py-1.5 rounded-lg font-semibold border transition",aa26WipeMode==="all"?"text-red-400 border-red-500/30 hover:bg-red-500/10":"text-amber-400 border-amber-500/30 hover:bg-amber-500/10",(aa26WipeBusy||aa26ConfigBusy)&&"opacity-50")}>{aa26WipeMode==="all"?"Full Reset...":"Wipe Demo Config..."}</button>
             </div>
@@ -4514,15 +5427,25 @@ echo "Refresh the AA26 dashboards to see the data."
                   const localLogs = [`Starting ${aa26WipeMode==="all"?"FULL":"DEMO"} wipe...`];
                   const addLog = m => { localLogs.push(m); setAa26WipeLog([...localLogs]); };
                   setAa26WipeBusy(true);setAa26WipeLog([...localLogs]);setAa26WipeConfirm(false);
+                  let wipeStats = null;
                   try {
                     const verify = await aa26VerifySession(cfg);
                     if (!verify.ok) { addLog(`✗ ${verify.error}`); setAa26WipeBusy(false); return; }
                     addLog(`✓ Authenticated as ${verify.user.email}`);
-                    await aa26WipeConfig(cfg, addLog, aa26WipeMode);
+                    wipeStats = await aa26WipeConfig(cfg, addLog, aa26WipeMode);
                   } catch(e) { addLog(`✗ Error: ${e.message}`); }
-                  setAa26WipeBusy(false);setAa26PostSetupCmd(null);
+                  setAa26WipeBusy(false);
+                  // v3.0.2 — if wipe generated a MIP cleanup SQL, surface it in Post-Setup area
+                  if (wipeStats?.mipWipeCmd) setAa26PostSetupCmd(wipeStats.mipWipeCmd);
+                  else setAa26PostSetupCmd(null);
+                  // v3.0.8: wipe doesn't create new executions, so clear any pending verification state
+                  setPhase5PendingIds([]);setPhase5Status(null);setPhase5VerifyDetails(null);
+                  // v3.1.0: clear tracked AA26 IDs after wipe — they no longer exist in AA26
+                  if (wipeStats && (wipeStats.srcDel > 0 || wipeStats.scanDel > 0)) {
+                    setCfg(p => ({...p, history: {...(p.history||{}), injectedAA26: {serviceAccountIds:[], sourceIds:[], scanIds:[]}}}));
+                  }
                   setRunHistory(prev=>[{type:aa26WipeMode==="all"?"config-wipe-full":"config-wipe-demo",time:new Date().toLocaleString(),rows:0,tables:0,errors:0,logs:[...localLogs]},...prev.slice(0,19)]);
-                  if(toast)toast(`${aa26WipeMode==="all"?"Full Reset":"Demo Wipe"} complete`,"success");
+                  if(toast)toast(`${aa26WipeMode==="all"?"Full Reset":"Demo Wipe"} complete${wipeStats?.mipWipeCmd?" — copy MIP cleanup SQL below":""}`,"success");
                 }} className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition">{aa26WipeMode==="all"?"Yes, Full Reset":"Yes, Wipe Demo"}</button>
               </div>
             </Modal>
@@ -4677,6 +5600,8 @@ echo "Refresh the AA26 dashboards to see the data."
           <button onClick={async()=>{
             setAa26ConfigLog(["Starting AA26 Configuration Setup..."]);
             setAa26ConfigBusy(true);setAa26PostSetupCmd(null);setAa26ConfigPhase(0);
+            // v3.0.8: reset Phase 5 verification state at start of new run
+            setPhase5PendingIds([]);setPhase5Status(null);setPhase5VerifyDetails(null);
             // Hook into log to advance phase counter
             const logFn = m => {
               setAa26ConfigLog(prev=>[...prev,m]);
@@ -4693,6 +5618,29 @@ echo "Refresh the AA26 dashboards to see the data."
               logFn(``);
               const result = await aa26RunFullConfig(cfg, logFn);
               if (result.postSetupCmd) setAa26PostSetupCmd(result.postSetupCmd);
+              // v3.0.8: stash the new exec IDs and mark Phase 5 as pending
+              if (Array.isArray(result.newExecIds) && result.newExecIds.length > 0) {
+                setPhase5PendingIds(result.newExecIds);
+                setPhase5Status('pending');
+              }
+              // v3.1.0: persist tracked IDs (SAs, sources, scans) so the wipe can identify
+              // demo-managed items by UUID even after region/vertical/hostname customization
+              if (result.createdIds) {
+                setCfg(p => {
+                  const inj = p.history?.injectedAA26 || { serviceAccountIds: [], sourceIds: [], scanIds: [] };
+                  return {
+                    ...p,
+                    history: {
+                      ...(p.history || {}),
+                      injectedAA26: {
+                        serviceAccountIds: [...new Set([...inj.serviceAccountIds, ...result.createdIds.serviceAccountIds])],
+                        sourceIds: [...new Set([...inj.sourceIds, ...result.createdIds.sourceIds])],
+                        scanIds: [...new Set([...inj.scanIds, ...result.createdIds.scanIds])],
+                      },
+                    },
+                  };
+                });
+              }
               setAa26ConfigPhase(5);
               if(toast)toast(`AA26 Configuration complete — ${result.scnCreated} scans, ${result.execCreated} executions`,"success");
             } catch(e) { logFn(`✗ Error: ${e.message}`); if(toast)toast(`Configuration failed: ${e.message}`,"error"); }
@@ -4710,6 +5658,68 @@ echo "Refresh the AA26 dashboards to see the data."
           {aa26ConfigLog.map((m,i)=><div key={i} className={m.startsWith("✗")||m.includes("Failed")?t.danger:m.startsWith("✓")||m.startsWith("→")?t.textMuted:t.textFaint}>{m}</div>)}
         </div>}
         {aa26PostSetupCmd&&<div className="space-y-2">
+          {/* v3.0.8: Phase 5 application status banner — polls the API to verify the SQL has been applied */}
+          {phase5Status==='pending'&&<div className={cn("p-3 rounded-lg border-2 flex items-start gap-3","bg-red-50 dark:bg-red-950/30 border-red-400 dark:border-red-800")}>
+            <span className="text-2xl flex-shrink-0">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <div className={cn("font-bold text-sm",t.danger||"text-red-700 dark:text-red-300")}>Phase 5 SQL NOT YET APPLIED</div>
+              <div className={cn("text-xs mt-1",t.textMuted)}>
+                {phase5PendingIds.length} new execution{phase5PendingIds.length===1?'':'s'} still showing <code className={cn("px-1 rounded",t.codeBlock)}>totalObjects=0</code> in AA26. Copy the kubectl command below and run on the AA26 server, then click "Verify Now" to confirm.
+              </div>
+            </div>
+            <button onClick={async()=>{
+              setPhase5Status('verifying');
+              try {
+                const results = await Promise.all(phase5PendingIds.map(id =>
+                  fetch(`${cfg.connection.url}/api/v1/scan-executions/${id}`, {credentials:'include'}).then(r=>r.ok?r.json():null)
+                ));
+                const applied = results.filter(e => e && (e.totalObjects ?? e.total_objects) > 0).length;
+                const total = phase5PendingIds.length;
+                setPhase5VerifyDetails({applied, total, sample: results.slice(0,3).map(e => ({id:e?.id?.slice(0,8), total:e?.totalObjects??e?.total_objects??'?'}))});
+                if (applied === total) {
+                  setPhase5Status('applied');
+                  if(toast)toast(`✓ All ${total} executions populated — Phase 5 SQL applied successfully`,"success");
+                } else if (applied > 0) {
+                  setPhase5Status('partial');
+                  if(toast)toast(`⚠ Partial: ${applied}/${total} executions updated — check kubectl output for errors`,"warning");
+                } else {
+                  setPhase5Status('pending');
+                  if(toast)toast(`✗ No executions updated yet — SQL hasn't been run or rolled back`,"error");
+                }
+              } catch(e) {
+                setPhase5Status('pending');
+                if(toast)toast(`Verification error: ${e.message}`,"error");
+              }
+            }} className={cn("text-xs px-3 py-2 rounded-lg font-semibold flex-shrink-0","bg-red-600 hover:bg-red-700 text-white")}>✓ Verify Now</button>
+          </div>}
+          {phase5Status==='verifying'&&<div className={cn("p-3 rounded-lg border-2",t.bgInput,t.border)}>
+            <span className={cn("text-sm",t.textMuted)}>⏳ Polling AA26 API for {phase5PendingIds.length} execution{phase5PendingIds.length===1?'':'s'}...</span>
+          </div>}
+          {phase5Status==='applied'&&<div className={cn("p-3 rounded-lg border-2 flex items-start gap-3","bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-800")}>
+            <span className="text-2xl flex-shrink-0">✅</span>
+            <div className="flex-1 min-w-0">
+              <div className={cn("font-bold text-sm",t.success||"text-emerald-700 dark:text-emerald-300")}>Phase 5 SQL Applied Successfully</div>
+              <div className={cn("text-xs mt-1",t.textMuted)}>All {phase5VerifyDetails?.total||phase5PendingIds.length} new executions show real object counts. Source groups linked, historical executions cloned, MIP labels inserted. AA26 dashboards should now render correctly.</div>
+            </div>
+            <button onClick={()=>{setPhase5Status(null);setPhase5PendingIds([]);setPhase5VerifyDetails(null);}} className={cn("text-xs px-2 py-1 rounded",t.btnSecondary||t.codeBlock)}>Dismiss</button>
+          </div>}
+          {phase5Status==='partial'&&<div className={cn("p-3 rounded-lg border-2 flex items-start gap-3","bg-amber-50 dark:bg-amber-950/30 border-amber-400 dark:border-amber-800")}>
+            <span className="text-2xl flex-shrink-0">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <div className={cn("font-bold text-sm","text-amber-700 dark:text-amber-300")}>Phase 5 SQL Partially Applied</div>
+              <div className={cn("text-xs mt-1",t.textMuted)}>{phase5VerifyDetails?.applied}/{phase5VerifyDetails?.total} executions updated. The kubectl command may have errored partway — check its output for SQL errors.</div>
+            </div>
+            <button onClick={async()=>{
+              setPhase5Status('verifying');
+              const results = await Promise.all(phase5PendingIds.map(id =>
+                fetch(`${cfg.connection.url}/api/v1/scan-executions/${id}`, {credentials:'include'}).then(r=>r.ok?r.json():null)
+              ));
+              const applied = results.filter(e => e && (e.totalObjects ?? e.total_objects) > 0).length;
+              const total = phase5PendingIds.length;
+              setPhase5VerifyDetails({applied, total});
+              setPhase5Status(applied===total?'applied':applied>0?'partial':'pending');
+            }} className={cn("text-xs px-3 py-2 rounded-lg font-semibold flex-shrink-0","bg-amber-600 hover:bg-amber-700 text-white")}>↻ Re-check</button>
+          </div>}
           <div className={cn("p-2 rounded text-xs",t.bgInput)}>
             <div className="flex items-center justify-between mb-1">
               <span className={cn("font-semibold",t.text)}>📋 Phase 5: Post-Setup Command (run on AA26 server)</span>
@@ -4945,7 +5955,7 @@ function App(){
       <div className={cn("border-b sticky top-0 z-10 backdrop-blur",t.border,mode==="dark"?"bg-slate-950/90":"bg-stone-50/90")}>
         <div className="max-w-6xl mx-auto px-6 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center text-white text-xs font-bold shadow">N</div>
+            <img src={mode==="dark" ? "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAHmElEQVR42u2dXWwcVxXH/+fOnf2cXX+mcewkzkftOI1TUSKUBlqUlipCBUV9AB5AqUBFSBQVgVJA4sWtEPSlKKLJA1GlRApCkYxAUVHTkkp1QP0I1AlVQASqItepkzSxG7de27szc+89PHhcTBq1Itl4d53zf7JsX83M+d3zOau9hAYUMysACgATkb3a/xw8eDDT29tb9H0/yOV0xhiTTv4Ut7Q0zY6Pl8pnzpyZ2bVrVwkAX7meCHCO9fHjx7F9+3ZLRHwjnoUayOi0wOhu/veHDh3K3333nb1B0NTvedSvPK9HEa1SnmoDuAhQVhFpx04nS5xSKnKOI2aeYWCSrbtorBmNYvMvtnR6cnLyzKZNm0avuL43v76aMHSDGN4jIgPAAsCpU6/2dHV135dOp3d42vtUJpPq0l72ipUOgIVjB2YG8wc2U0SklVI5gtcMeF0A+heubG7Oh1PTk2+Y2L5cKZdfGBk5+xIRXfrvPQ1poDpeQfW+4+dDzODgYNNdd336gSDIfc3T+rO5bCEJKQZRHIKZbRJKiBlE9KHnW/gzJ9dAYkReEIaU1lp5Kv3Bktly6XIcxy/OzoSHDx8+/Nzu3bvLC7ziujyC6tT43rzhT5wYWrl+/W3fymYz38jniysBwNgynLOGGQSAiEhV+frzQBwRyPdTHiEFAJiZmXqzVJo68Nprf316586dE1feb0MDSJIriMg988yv27dtu/d7+SD4djYTtAIGYVSxC8IILeJ9zcNAys96gIdyuXR+cvLyL5588gd79+z5TflavaFuAAwNDel77rnHAMC5C+ceKhaCx4N8sctxiDiODTN7Simqg03iALh0Kq0BH6WZ9/9+fuzcD/v6Nj2XVE5qYZHQCEmYmFkRkXn99T/3rl3bs7dYbNkxt+OnTZKA9SJu+I++2blwpyphhYlCW8gX+3t6ckcvjb+z94mfPfIjIir/PyFJ1fJhBgYGVJII7djYyNc3bOj/S7HYsiOMSrYSljkxfF3mKaUUEZGuhNPO2Mgta1/+yGOP7//T0NDzfURkmVnXdQhKdr0D4E1MXHiqra3jYetCxHFklVJeozWHzjmTSRf0bHl64uzoW1/euHHzcWbWSflcXx4wODjoEZEbHHy69b33xp9va+t4OIpnTBxH3IjGTzxCV8KSzWUz7WvWrPvDP9742xeJyHycJ1Ctdv7p068u7+7uO1YsNt8eRtMxEflYAnLOOd9PqTgy8ejom5/v6/vEix+VE1QtjH/06NFl69ZtfKFYbL69EpbMUjF+4gkqjiOXSqf81avX/+7kyZMbk5ygagog6Wx53759wbbPbH02n2/aXAlLRimlscSklFJRVLHZbNB0a+/a3w4ODgYLbLD4IWjBWIHHJy78vr2t4/6lavz/CUfsTCZV0O9cfPtXKzpWP3i1ULRYHuARkT07NrKnva3j/jCajpe68efadaWjeMZ0LF+5a2Tknw8kochbVAAJdfPvkTNfXdW15ruxKcfA0on5H//8Tjlnua39lqeOHDlSSCYbtCgAmFkppezw8EvrV3Ss/KW1obPWaCLcNCJSKjYVWwhaVm3desejSe+jFgMAJWMGWrv21oPZTFCITcT1MM+pgTzrQlcoNn3/2LEjnQDcwMCAuqFJeD7hjI299Z2uru59YTRtiEjjJhUzm3Qq0BcuvP1EZ+fqH893yepGhR4Abnh4eEVLa8tPjQ1dredOdQDAcy7mQjH/zRMnjhaVUoaZSV+tNr3OGpiTktNcHB/7SS5bbAqjUkykPMy9J2xE49H1DgWVUhSb0Ab51mWdnRu+xMwHAHj6RrztJyLzyit//GR767KHAIN0KuM30Pv/D8k6A2tt1XjmC/kHARwA4PT7UxOntNZX+WDGNTYfcC7tB+rdyUvDZ8+ev9fakNjzHIxpvArG9z2OY9vZteLRbKbwhSietUR0PcNCZW2Fctn8nSdPvtxNRKO6WGi+A6jmANIA0AiC4NSK5c1DSyF+V8LprySvnfk6IwMZa0wmHaSXd676HIADerY87TxPA1wlFyAYX+e0NYaTrk8nVBpRGoAJ49lUdXMKkPH9+wAc0ESklKKq2T9pvhQphaT1pmv9xECdJF9biWaqmScVESOVSm3Zv3+/f1OXhrUaEVkXwtNe95YtW9YLgEUfTRCstS6Xzafb24v9AqA2oY0BjUwud5sAqKF83+8RADWKRHPZWHULgNr11/A87xYBUCMPYFgwuFUA1AiAcw6e8rICoEalKDPDWpMTALUrRaGUUgKg1m2xmEAACACRABAAIgEgAEQCQACIBIAAEAkAASASAAJAJAAEgEgACACRABAAIgEgAEQCQACIBIAAEAkAASASAAJAJAAEgEgACACRABAAIgEgAEQCQACIBIAAEAkAASASAAJAJAAEgEgACACRABAAIgFQl9I8JzBX7ZAIRtWOBKorMea+eb56hmKG1lqT1rpqAIwxGgDR0vIuhblvPNda66qcx5Uc5AAdRfGsc1X1AGOt1da5ytLZ+1wBMDt3CJKtznGM8wAuv3tpM5Cp2r2mUsxEszQ1NVVKSNsGNr0FgCh0j6VT+HnK97hSCat0Il0a1ij8B22xbaadpdsXAAAAAElFTkSuQmCC" : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAG20lEQVR42u2dTWxcVxXH/+fc+97M+GOc4Nipx45TJTGxjNwQRQQqQqcIxMeuQhqpXVR8iE1BSGSBxK6wYAtIhRVCaoUKQmZJowgQ0aQsUElLU6mTojpIad00rTFqY9cZe949h8WbsYcqDkV945lxzl8aPc3TzH33nt89555z35MeoT/FZZR5HOO6gIVwux/Mzc3FuFkc2pBkEIGKLIhUlQKHEOWj1WSj/t6qJOvLy7W1nS5SRtkDQBXVAEA7MRDqI6NTBRVewJwCP5TWyYMHDw4W3fSMI3cfwPMMPgrQIQLtA6EIUAGqeRAcAEChSqgTUFdgHcC/ofo2oK9BUSMOL9elUbt6/dLr7Rd/HI9zDTVawIJkCaMfAFAZZVdFNWmdODp28lgcFT4P4i8z6BSxm3Tkm8NRqGp6BADVlt0B0PaACc3vBCLaMoVCIKFRF8I/iOQvQRp/TsLGs4s3Xlxu94ysvIJ6f8anIWZ6ZHp/YXDyIUfRwww84FycBwBRgapAoQEgBZQIoC0L336sbYZTVUDT/wIEZYCZiUHEUAiCNFZU5aJQ8qs1LJ1fWlq6lRWIngRQQcVtGf7AqYmBXO5bDv4b3kUlgBAkQCGhOYcJAGfcBU3BkBCUCOyYXQojJIsB4Zc3deUX16+/stLsscMOa1G/AeA0ZpCWSrOj++gj32WKHnMcjYoKREPL6LzLfVeFCgFE5JiJkYTGdaGNn15Z+usTAOrNSfN/rw89A6DpzgkAfHTqU9+MKP6Bp3hSNEBEE0oX0R7or4qChIk9MyORxkshufW9V9587g/bkwjyQVtzPRLr3TmcC/eW5o+XirO/zrnCWYCKQUICgHrH+Gh2J/VUEQmO/ARz9OjocGn8X6t6AbjZqKDiaqhpP3jAVsg5Xvrk1z3nf+I5GkmkEdJBUs9naWloIjiOuBHqlzY21x65uvz3xXaP7lUALVfl2cn7fxa7gcdUBaISCOTQZ1Ig8ex9Io23N5P1yqs3/nbxg0DoEoA0azg8cmLfULH4m4jzX0pCIwHU9cOsv4M3BCbnVGVzQ9e/8uobzz3zvyBQt2b+4bG5ewZzo+cjzp9IpJEQ4LEHpFBhYobq5q1k7QuLNy5V29PqbgNgAHLk4H3jBT/yJ+9y84kke8b4/w3BsWh4t95459NX37r88k7ZEe9ivwhQnZqaKuR98ffe5fek8Vt1imgIjv1IHA3/bnT0+HAFFbrdhN8tAFRBhQHCsE7/NnKFT+ylsLMDBBckJDEXZsdy+3++gIWQ2qALdUAZZX8O58Lx0v0/zvuhrybSaBAQYY+LABaVJHK5kyMDY5efXfvjlffXCB33gAoqropqMjNx+pGcHzjbuEuMvw1BGarqXPzE2NjcULqdvh2KOu0BXENNZ8bnj+Si4jNIDd9DVe3uVM4CDRHH+yJGY2X16QtllP01XJNOewA1Fx5EUfFJx9GwqOjdZfytUOREgnjKnZ0+MDvR3MLmjgJo7eXPTpz+duQKn0kznv6rcLNiIFDxHBcL8f7vANAyytzJOoAB6KHRkxPFwvAVJjeU3qXa1bS358oDIkaQzZX31lZnrr17+R1ge18900+Trg7G+R95joui2qoCpU8/mokXaJDI5Q/kB/MPNbND59GBu/1VVJPDpRMfj1zua6oBTNTfWY9u3WHOpDXm6FEATz6IB4U+NnXmhSwjkQLiyHND1l9Q6NMKECFI+26UB5DscGxX+7mk7b930vt/d6d2b3ds76Mqu0ASYhS+H7ncF4MkH3anVglECtlcD2sz/3zz+de8o/hktgAUniMECc/X3rh4YS8E77lD5Ur6PAXphw5DkOA5imOJPgvgKS+aSMZrcSJKPg2dFXcMq34Rw0k/Gn6772/lMkyIFCAwos8BeMqnC3GmIYibizuAhTCJMi3ifOhHANt9fyDDB7GUVQUgnD6FU9HdnBZ2rTJWFRDo8PpkuNcAdIGAQoXZ5xW5eQPQlaxWlUAg5TkD0E0xHzUA3YhBrQdXlQxAtxAoFAQeNQBdcwKFQg8YgO65AIgwYAC6lwlBFQUD0FU3IGcAup2JmgkMgAEwGQADYDIABsBkAAyAyQAYAJMBMAAmA2AATAbAAJgMgAEwGQADYDIABsBkAAyAyQAYAJMBMAAmA2AATAbAAJgMgAEwGQADYDIABsBkAAyAyQAYAJMBMAAmA2AATAbAAJgMgAEwGQADYDIAPalOvEVJO9BmL0g7MTZPIMr2HTLaanMPeZdyOib4bF+5TvACWc/8JT4IHpD6HorU9dROSBTqs3MpBc2MnzmCfJZMSXNQurW5trp448VlpHT7NSQRAD12z5mxQpwbJmyqIs5wtm7gPylo5WrKu8i4AAAAAElFTkSuQmCC"} alt="Netwrix" className="w-7 h-7" style={{objectFit:"contain"}} />
             <div>
               <div className={cn("text-sm font-semibold leading-tight",t.text)}>AA26 Demo Data Manager</div>
               <div className={cn("text-[10px] uppercase tracking-[0.15em]",t.textFaint)}>Netwrix Access Analyzer <span className={cn("ml-1",t.textMuted)}>v{APP_VERSION}</span></div>
