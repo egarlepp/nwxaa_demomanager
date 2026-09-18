@@ -1,7 +1,17 @@
 import { useState, useCallback, useEffect } from "react";
 
+
+
+
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.0.0";
+const APP_VERSION = "3.3.3";
+// v3.2.0: the AA26 product version this build was actually validated against. Compared live
+// against the connected instance's real version (read via /api/v1/source-types) so a mismatch
+// gets flagged before it causes confusing data-injection failures.
+// v3.3.2: list, not a single string — v1.1.6 confirmed compatible via live schema-diff (zero
+// drift across all 13 hardcoded-column tables), so it's added alongside 1.1.5 rather than
+// replacing it. A straight swap would've made a real v1.1.5 connection show a false mismatch.
+const AA26_SUPPORTED_VERSIONS = ["1.1.5", "1.1.6"];
 const themes = {
   dark: {
     bg: "bg-slate-950", bgCard: "bg-slate-900/70", bgInput: "bg-slate-800/80", bgHover: "hover:bg-slate-800",
@@ -50,8 +60,8 @@ const VERTICAL_TEMPLATES = {
     label: 'Healthcare / Hospital',
     icon: '🏥',
     description: 'Hospital / medical center — PHI heavy, HIPAA-focused',
-    domain: {name:'STJOSEPH', fqdn:'stjoseph.health', sidBase:'S-1-5-21-1234567890-987654321-1122334455'},
-    spoTenant: 'stjoseph',
+    domain: {name:'MERIDIANHEALTH', fqdn:'meridianhealth.health', sidBase:'S-1-5-21-1234567890-987654321-1122334455'},
+    spoTenant: 'meridianhealth',
     departments: [
       {name:'Cardiology',weight:8,subs:['Interventional','Echocardiography','Cath Lab','Heart Failure']},
       {name:'Radiology',weight:10,subs:['Imaging','MRI','CT Scan','Ultrasound']},
@@ -95,15 +105,15 @@ const VERTICAL_TEMPLATES = {
       {name:'Research IRB',pathSuffix:'irb',type:'sharepoint',docs:40,sensitiveRate:60,libraries:['Studies','Consent Forms','IRB Reviews']},
     ],
     onedriveUsers: ['CMO','CIO','Chief_Medical_Officer','Director_Radiology','Compliance_Officer','HR_Director','Pharmacy_Director'],
-    taxonomies: ['PHI','PII','PCI DSS','Financial'],
+    taxonomies: ['PHI','PII','HIPAA','PCI DSS'],
     fileNamePatterns: ['patient_record','lab_result','imaging_report','prescription','discharge_summary','consult_note','operative_report','radiology_report','consent_form','insurance_claim','medication_admin','vital_signs','triage_assessment','progress_note','referral'],
   },
   finance: {
     label: 'Financial Services / Banking',
     icon: '🏦',
     description: 'Bank / asset manager — PCI, SOX, KYC focused',
-    domain: {name:'NORTHBANK', fqdn:'northcap.bank', sidBase:'S-1-5-21-2345678901-876543210-2233445566'},
-    spoTenant: 'northcap',
+    domain: {name:'SUMMITFINANCIAL', fqdn:'summitfinancial.bank', sidBase:'S-1-5-21-2345678901-876543210-2233445566'},
+    spoTenant: 'summitfinancial',
     departments: [
       {name:'Investment Banking',weight:10,subs:['M&A','Capital Markets','Coverage']},
       {name:'Trading',weight:12,subs:['Equities','Fixed Income','FX','Derivatives']},
@@ -146,15 +156,15 @@ const VERTICAL_TEMPLATES = {
       {name:'Internal Audit',pathSuffix:'audit',type:'sharepoint',docs:45,sensitiveRate:55,libraries:['Audit Reports','Workpapers','SOX']},
     ],
     onedriveUsers: ['CFO','Chief_Risk_Officer','Head_of_Trading','MD_Investment_Banking','Chief_Compliance_Officer','General_Counsel','Head_of_M&A'],
-    taxonomies: ['PCI DSS','PII','Financial','GDPR'],
+    taxonomies: ['PCI DSS','PII','Financial Records','GDPR','GLBA'],
     fileNamePatterns: ['trade_blotter','audit_report','kyc_review','financial_statement','pitch_book','due_diligence','client_proposal','risk_assessment','sox_control','compliance_report','aml_investigation','trade_confirmation','portfolio_review','regulatory_filing','market_analysis'],
   },
   manufacturing: {
     label: 'Manufacturing / Industrial',
     icon: '🏭',
     description: 'Industrial mfg — IP, trade secrets, ITAR focus',
-    domain: {name:'ATLAS', fqdn:'atlasmfg.com', sidBase:'S-1-5-21-3456789012-765432109-3344556677'},
-    spoTenant: 'atlasmfg',
+    domain: {name:'TITANINDUSTRIES', fqdn:'titanindustries.com', sidBase:'S-1-5-21-3456789012-765432109-3344556677'},
+    spoTenant: 'titanindustries',
     departments: [
       {name:'Production',weight:20,subs:['Assembly','Machining','Welding','Quality Control']},
       {name:'Engineering',weight:12,subs:['Mechanical','Electrical','Industrial','CAD']},
@@ -197,15 +207,15 @@ const VERTICAL_TEMPLATES = {
       {name:'EHS Compliance',pathSuffix:'ehs',type:'sharepoint',docs:45,sensitiveRate:20,libraries:['MSDS','Incidents','Training Records']},
     ],
     onedriveUsers: ['Plant_Manager','VP_Operations','Chief_Engineer','VP_Engineering','Quality_Director','Supply_Chain_Director','VP_RandD'],
-    taxonomies: ['ITAR','Trade Secrets','PII','Financial'],
+    taxonomies: ['CMMC','Credentials','PII','Financial Records'],
     fileNamePatterns: ['drawing','bom','schematic','assembly_instruction','qc_report','inspection_record','part_specification','engineering_change','supplier_quality','safety_data_sheet','plc_program','maintenance_log','production_schedule','test_protocol','calibration_record'],
   },
   engineering: {
     label: 'Engineering / Tech',
     icon: '💻',
     description: 'Software / SaaS company — source code, IP, customer data',
-    domain: {name:'AURORA', fqdn:'auroratech.io', sidBase:'S-1-5-21-4567890123-654321098-4455667788'},
-    spoTenant: 'auroratech',
+    domain: {name:'NEXUSCLOUD', fqdn:'nexuscloud.io', sidBase:'S-1-5-21-4567890123-654321098-4455667788'},
+    spoTenant: 'nexuscloud',
     departments: [
       {name:'Engineering',weight:25,subs:['Backend','Frontend','Mobile','Platform','SRE','Security']},
       {name:'Product',weight:8,subs:['PM','Design','Research','Analytics']},
@@ -248,15 +258,15 @@ const VERTICAL_TEMPLATES = {
       {name:'Team - Security',pathSuffix:'Team-Security',type:'teams',docs:45,sensitiveRate:55,libraries:['Shared Documents','General','Incidents']},
     ],
     onedriveUsers: ['CTO','VP_Engineering','CISO','VP_Product','VP_Sales','VP_Customer_Success','Head_of_Data'],
-    taxonomies: ['PII','PCI DSS','Source Code','Customer Data','GDPR'],
+    taxonomies: ['Credentials','PII','PCI DSS','GDPR'],
     fileNamePatterns: ['design_doc','rfc','postmortem','runbook','architecture_diagram','customer_data','onboarding_plan','sprint_retro','product_roadmap','security_review','threat_model','api_spec','release_notes','incident_report','code_review'],
   },
   federal: {
     label: 'Federal / Government',
     icon: '🏛',
     description: 'Federal agency / contractor — classified, FOIA, FedRAMP',
-    domain: {name:'AGENCY', fqdn:'agency.gov', sidBase:'S-1-5-21-5678901234-543210987-5566778899'},
-    spoTenant: 'agencygov',
+    domain: {name:'METROCOUNTY', fqdn:'metrocounty.gov', sidBase:'S-1-5-21-5678901234-543210987-5566778899'},
+    spoTenant: 'metrocounty',
     departments: [
       {name:'Operations',weight:15,subs:['Field Ops','Mission Support','Logistics']},
       {name:'Intelligence',weight:10,subs:['Analysis','Collection','Counterintel']},
@@ -299,15 +309,15 @@ const VERTICAL_TEMPLATES = {
       {name:'OIG Investigations',pathSuffix:'oig',type:'sharepoint',docs:40,sensitiveRate:60,libraries:['Active Cases','Closed Cases','Reports']},
     ],
     onedriveUsers: ['Director','Deputy_Director','CISO','General_Counsel','CIO','Inspector_General','Chief_of_Staff'],
-    taxonomies: ['Classified','CUI','PII','ITAR','FedRAMP'],
+    taxonomies: ['CMMC','PII','GDPR Restricted','Credentials'],
     fileNamePatterns: ['case_file','foia_request','briefing_memo','classification_review','procurement_solicitation','contract_award','personnel_action','security_clearance','incident_report','threat_assessment','policy_directive','operational_plan','after_action_report','audit_finding','redacted_document'],
   },
   education: {
     label: 'Education / University',
     icon: '🎓',
     description: 'University / school — FERPA, research IP, student data',
-    domain: {name:'STATEU', fqdn:'state.edu', sidBase:'S-1-5-21-6789012345-432109876-6677889900'},
-    spoTenant: 'stateu',
+    domain: {name:'GREATPLAINS', fqdn:'greatplains.edu', sidBase:'S-1-5-21-6789012345-432109876-6677889900'},
+    spoTenant: 'greatplains',
     departments: [
       {name:'Academics',weight:18,subs:['Faculty','Curriculum','Assessment']},
       {name:'Admissions',weight:6,subs:['Undergraduate','Graduate','International']},
@@ -351,7 +361,7 @@ const VERTICAL_TEMPLATES = {
       {name:'Advancement',pathSuffix:'advancement',type:'sharepoint',docs:50,sensitiveRate:35,libraries:['Donor Records','Campaigns','Alumni']},
     ],
     onedriveUsers: ['President','Provost','VP_Research','VP_Student_Affairs','CFO','Athletic_Director','Dean_Engineering'],
-    taxonomies: ['FERPA','PII','PCI DSS','Research Data'],
+    taxonomies: ['PII','PCI DSS','GDPR','Credentials'],
     fileNamePatterns: ['transcript','grade_report','course_syllabus','financial_aid_application','admission_decision','dissertation','research_grant','irb_application','student_advising_note','degree_audit','faculty_evaluation','tenure_dossier','athletics_eligibility','alumni_record','donor_proposal'],
   },
   retail: {
@@ -402,7 +412,7 @@ const VERTICAL_TEMPLATES = {
       {name:'Customer Insights',pathSuffix:'insights',type:'sharepoint',docs:50,sensitiveRate:50,libraries:['Customer Analytics','Loyalty Data','Surveys']},
     ],
     onedriveUsers: ['CEO','CMO','COO','CFO','CIO','VP_Merchandising','VP_StoreOps','VP_ECommerce'],
-    taxonomies: ['PCI DSS','PII','Customer Data','GDPR'],
+    taxonomies: ['PCI DSS','PII','GDPR','Financial Records'],
     fileNamePatterns: ['customer_record','transaction_log','credit_card_authorization','pci_audit_report','loyalty_member','store_inventory','sales_report','vendor_contract','marketing_campaign','promotion_plan','price_list','product_specification','return_authorization','loss_prevention_report'],
   },
   energy: {
@@ -454,46 +464,310 @@ const VERTICAL_TEMPLATES = {
       {name:'Safety & Environmental',pathSuffix:'safety',type:'sharepoint',docs:50,sensitiveRate:30,libraries:['Safety Procedures','Incident Reports','Compliance']},
     ],
     onedriveUsers: ['CEO','CFO','COO','CISO','VP_Generation','VP_Transmission','VP_Distribution','Regulatory_Director'],
-    taxonomies: ['NERC CIP','PII','Critical Infrastructure','Customer Data'],
+    taxonomies: ['CMMC','PII','Credentials','GDPR Restricted'],
     fileNamePatterns: ['scada_log','grid_event','outage_report','asset_inventory','nerc_audit','cip_assessment','load_forecast','one_line_diagram','protection_setting','customer_outage_history','rate_case_filing','environmental_report','safety_incident','vegetation_mgmt','meter_reading'],
   },
 };
 
 const VERTICAL_KEYS = Object.keys(VERTICAL_TEMPLATES);
 
+// ═══════════════════════════════════════════════════════════════════════════
+// v3.1.0: REGIONALIZATION — 8 locales drive names, domains, departments, regs
+// ═══════════════════════════════════════════════════════════════════════════
+// Region is selected globally; cascades to: user names, email domains, company
+// names (per industry), department names, and regional regulation overlays.
+// Each locale supplies the same 6 layers so generators can swap regions cleanly.
+
+const LOCALES = {
+  us: {
+    code: 'us', name: 'United States', flag: '🇺🇸',
+    emailTlds: ['com'],
+    phonePrefix: '+1',
+    offices: [['HQ','100 Innovation Drive','Austin','TX','78701','US'],['NYC','350 5th Avenue','New York','NY','10118','US'],['SFO','101 Market Street','San Francisco','CA','94105','US'],['CHI','233 S Wacker Drive','Chicago','IL','60606','US'],['BOS','1 Federal Street','Boston','MA','02110','US']],
+    legalSuffixes: ['Inc', 'LLC', 'Corp'],
+    firstNames: ['James','Mary','John','Patricia','Robert','Jennifer','Michael','Linda','William','Elizabeth','David','Barbara','Richard','Susan','Joseph','Jessica','Thomas','Sarah','Charles','Karen','Christopher','Nancy','Daniel','Lisa','Matthew','Margaret','Anthony','Betty','Mark','Sandra','Donald','Ashley','Steven','Kimberly','Paul','Emily','Andrew','Donna','Joshua','Michelle','Kenneth','Carol','Kevin','Amanda','Brian','Dorothy','George','Melissa','Edward','Deborah'],
+    lastNames: ['Smith','Johnson','Williams','Brown','Jones','Miller','Davis','Wilson','Anderson','Thomas','Taylor','Moore','Jackson','Martin','Lee','Thompson','White','Harris','Clark','Lewis','Robinson','Walker','Young','Allen','King','Wright','Scott','Hill','Green','Adams','Nelson','Baker','Hall','Campbell','Mitchell','Carter','Roberts','Phillips','Evans','Turner','Parker','Edwards','Collins','Stewart','Sanchez','Morris','Rogers','Reed','Cook','Morgan'],
+    departments: {executive:'Executive',finance:'Finance',hr:'Human Resources',it:'IT',sales:'Sales',marketing:'Marketing',legal:'Legal',ops:'Operations'},
+    extraRegulations: []
+  },
+  latam_pt: {
+    code: 'latam_pt', name: 'LATAM (Brazil/PT)', flag: '🇧🇷',
+    emailTlds: ['com.br'],
+    phonePrefix: '+55',
+    offices: [['HQ','Avenida Paulista 1000','São Paulo','SP','01310-100','BR'],['RIO','Avenida Atlântica 500','Rio de Janeiro','RJ','22070-002','BR'],['BSB','SCS Quadra 1','Brasília','DF','70300-901','BR'],['POA','Avenida Borges de Medeiros 600','Porto Alegre','RS','90020-020','BR']],
+    legalSuffixes: ['Ltda','S.A.','S.A.S.','EIRELI'],
+    firstNames: ['João','Maria','José','Ana','Antonio','Francisca','Carlos','Antônia','Paulo','Adriana','Pedro','Juliana','Lucas','Márcia','Luiz','Fernanda','Marcos','Patrícia','Gabriel','Aline','Rafael','Sandra','Daniel','Camila','Marcelo','Amanda','Bruno','Bruna','Eduardo','Jessica','Felipe','Letícia','Ricardo','Bianca','Rodrigo','Luciana','Fernando','Vanessa','Tiago','Renata','André','Vivian','Leonardo','Tatiana','Mateus','Carolina','Vinícius','Mariana','Thiago','Beatriz'],
+    lastNames: ['Silva','Santos','Oliveira','Souza','Rodrigues','Ferreira','Alves','Pereira','Lima','Gomes','Costa','Ribeiro','Martins','Carvalho','Almeida','Lopes','Soares','Fernandes','Vieira','Barbosa','Rocha','Dias','Nascimento','Andrade','Moreira','Nunes','Marques','Machado','Mendes','Freitas','Cardoso','Ramos','Gonçalves','Santana','Teixeira','Cavalcanti','Pinto','Castro','Cunha','Correia','Araújo','Pires','Monteiro','Mota','Campos','Borges','Sousa','Reis','Coelho','Brito'],
+    departments: {executive:'Diretoria',finance:'Financeiro',hr:'Recursos Humanos',it:'Tecnologia',sales:'Vendas',marketing:'Marketing',legal:'Jurídico',ops:'Operações'},
+    extraRegulations: ['LGPD (Brazil)','Marco Civil da Internet']
+  },
+  latam_es: {
+    code: 'latam_es', name: 'LATAM (Spanish)', flag: '🇲🇽',
+    emailTlds: ['com.mx','com.ar','com.co','com.cl','com.pe'],
+    phonePrefix: '+52',
+    offices: [['HQ','Paseo de la Reforma 222','Ciudad de México','CDMX','06600','MX'],['BUE','Avenida Corrientes 1000','Buenos Aires','','C1043','AR'],['BOG','Carrera 7 #71-21','Bogotá','','110231','CO'],['SCL','Avenida Apoquindo 4500','Santiago','','7550000','CL'],['LIM','Avenida Javier Prado 1000','Lima','','15036','PE']],  // rotate across Spanish-LATAM
+    legalSuffixes: ['S.A.','S.A. de C.V.','S.R.L.','S.A.C.'],
+    firstNames: ['Juan','María','Pedro','Ana','Carlos','Sofía','Miguel','Lucía','José','Camila','Diego','Valentina','Luis','Isabella','Andrés','Mariana','Felipe','Daniela','Gabriel','Paula','Sebastián','Antonella','Mateo','Renata','Nicolás','Ximena','Tomás','Catalina','Javier','Florencia','Santiago','Mónica','Alejandro','Verónica','Manuel','Patricia','Esteban','Carolina','Pablo','Gabriela','Cristián','Andrea','Joaquín','Bárbara','Martín','Alejandra','Maximiliano','Romina','Agustín','Constanza'],
+    lastNames: ['García','Rodríguez','Hernández','González','López','Martínez','Pérez','Sánchez','Ramírez','Torres','Flores','Rivera','Gómez','Díaz','Reyes','Cruz','Morales','Ortiz','Gutiérrez','Chávez','Ramos','Ruiz','Mendoza','Vargas','Castillo','Jiménez','Vásquez','Romero','Suárez','Núñez','Castro','Espinoza','Aguilar','Acosta','Medina','Salazar','Cabrera','Soto','Valenzuela','Fuentes','Contreras','Silva','Carrasco','Bravo','Pizarro','Alarcón','Tapia','Lagos','Sanhueza','Sandoval'],
+    departments: {executive:'Dirección Ejecutiva',finance:'Finanzas',hr:'Recursos Humanos',it:'Tecnología',sales:'Ventas',marketing:'Marketing',legal:'Legal',ops:'Operaciones'},
+    extraRegulations: ['LFPDPPP (Mexico)','Ley 25.326 (Argentina)','Ley 1581 (Colombia)']
+  },
+  uk: {
+    code: 'uk', name: 'United Kingdom', flag: '🇬🇧',
+    emailTlds: ['co.uk'],
+    phonePrefix: '+44',
+    offices: [['HQ','30 Finsbury Square','London','','EC2A 1AG','GB'],['MAN','1 Spinningfields','Manchester','','M3 3JE','GB'],['EDI','50 Lothian Road','Edinburgh','','EH3 9WJ','GB'],['BRS','Temple Quay','Bristol','','BS1 6DZ','GB']],
+    legalSuffixes: ['Plc','Ltd'],
+    firstNames: ['Oliver','Amelia','Harry','Olivia','Jack','Isla','George','Ava','Noah','Lily','Charlie','Mia','Leo','Sophia','Jacob','Ella','Oscar','Grace','Henry','Freya','William','Charlotte','Thomas','Emily','Alfie','Poppy','Joshua','Daisy','Archie','Phoebe','James','Florence','Ethan','Evie','Edward','Willow','Daniel','Maisie','Theo','Sienna','Samuel','Matilda','Lucas','Harper','Logan','Ruby','Mason','Esme','Joseph','Eliza'],
+    lastNames: ['Smith','Jones','Williams','Brown','Taylor','Davies','Wilson','Evans','Thomas','Roberts','Johnson','Walker','Wright','Robinson','Thompson','White','Hughes','Edwards','Green','Hall','Wood','Harris','Martin','Jackson','Clarke','Clark','Turner','Hill','Scott','Cooper','Morris','Ward','Moore','King','Watson','Baker','Harrison','Morgan','Patel','Young','Allen','Mitchell','James','Anderson','Phillips','Lee','Bell','Parker','Davis','Bennett'],
+    departments: {executive:'Executive',finance:'Finance',hr:'Human Resources',it:'IT',sales:'Sales',marketing:'Marketing',legal:'Legal',ops:'Operations'},
+    extraRegulations: ['UK GDPR','DPA 2018','NIS Regulations']
+  },
+  de: {
+    code: 'de', name: 'Germany', flag: '🇩🇪',
+    emailTlds: ['de'],
+    phonePrefix: '+49',
+    offices: [['HQ','Friedrichstraße 200','Berlin','','10117','DE'],['MUC','Maximilianstraße 35','München','','80539','DE'],['FRA','Kaiserstraße 60','Frankfurt am Main','','60329','DE'],['HAM','Jungfernstieg 38','Hamburg','','20354','DE']],
+    legalSuffixes: ['GmbH','AG','KG'],
+    firstNames: ['Lukas','Anna','Felix','Lea','Maximilian','Sophie','Paul','Mia','Jonas','Emma','Leon','Hannah','Finn','Marie','Noah','Lina','Elias','Sofia','Ben','Lara','Luis','Clara','Tim','Laura','Jan','Lena','Niklas','Ella','Tom','Maja','Henri','Amelie','Moritz','Greta','Philip','Charlotte','Alexander','Klara','Julian','Helena','David','Johanna','Florian','Mathilda','Stefan','Frieda','Andreas','Antonia','Thomas','Pauline'],
+    lastNames: ['Müller','Schmidt','Schneider','Fischer','Weber','Wagner','Becker','Schulz','Hoffmann','Schäfer','Koch','Bauer','Richter','Klein','Wolf','Schröder','Neumann','Schwarz','Zimmermann','Braun','Krüger','Hartmann','Lange','Schmitt','Werner','Schmitz','Krause','Meier','Lehmann','Schmid','Schulze','Maier','Köhler','Herrmann','König','Walter','Mayer','Huber','Kaiser','Fuchs','Peters','Lang','Scholz','Möller','Weiß','Jung','Hahn','Schubert','Vogel','Friedrich'],
+    departments: {executive:'Geschäftsleitung',finance:'Finanzen',hr:'Personal',it:'IT',sales:'Vertrieb',marketing:'Marketing',legal:'Recht',ops:'Operations'},
+    extraRegulations: ['BDSG','TTDSG']
+  },
+  it: {
+    code: 'it', name: 'Italy', flag: '🇮🇹',
+    emailTlds: ['it'],
+    phonePrefix: '+39',
+    offices: [['HQ','Via del Corso 100','Roma','','00186','IT'],['MIL','Corso Buenos Aires 50','Milano','','20124','IT'],['TOR','Via Roma 15','Torino','','10121','IT'],['NAP','Via Toledo 200','Napoli','','80132','IT']],
+    legalSuffixes: ['S.p.A.','S.r.l.'],
+    firstNames: ['Giuseppe','Maria','Antonio','Anna','Marco','Sofia','Luca','Giulia','Andrea','Martina','Francesco','Sara','Matteo','Chiara','Alessandro','Francesca','Davide','Alessia','Riccardo','Alice','Lorenzo','Aurora','Tommaso','Beatrice','Stefano','Elena','Gabriele','Giorgia','Federico','Greta','Simone','Camilla','Daniele','Emma','Giovanni','Vittoria','Pietro','Noemi','Filippo','Ginevra','Edoardo','Adele','Leonardo','Bianca','Cristian','Elisa','Mattia','Ludovica','Roberto','Margherita'],
+    lastNames: ['Rossi','Russo','Ferrari','Esposito','Bianchi','Romano','Colombo','Ricci','Marino','Greco','Bruno','Gallo','Conti','De Luca','Mancini','Costa','Giordano','Rizzo','Lombardi','Moretti','Barbieri','Fontana','Santoro','Mariani','Rinaldi','Caruso','Ferrara','Galli','Martini','Leone','Longo','Gentile','Martinelli','Vitale','Lombardo','Serra','Coppola','De Santis','D\'Angelo','Marchetti','Parisi','Villa','Conte','Ferretti','Bianco','Sanna','Farina','Gatti','Pellegrini','Palumbo'],
+    departments: {executive:'Direzione',finance:'Finanza',hr:'Risorse Umane',it:'IT',sales:'Vendite',marketing:'Marketing',legal:'Legale',ops:'Operazioni'},
+    extraRegulations: ['Codice Privacy','Garante Privacy Guidelines']
+  },
+  fr: {
+    code: 'fr', name: 'France', flag: '🇫🇷',
+    emailTlds: ['fr'],
+    phonePrefix: '+33',
+    offices: [['HQ','15 Avenue Montaigne','Paris','','75008','FR'],['LYO','12 Place Bellecour','Lyon','','69002','FR'],['MRS','La Canebière 50','Marseille','','13001','FR'],['TOU','24 Place du Capitole','Toulouse','','31000','FR']],
+    legalSuffixes: ['SA','SAS','SARL'],
+    firstNames: ['Antoine','Camille','Lucas','Léa','Pierre','Marie','Hugo','Emma','Louis','Chloé','Jules','Manon','Gabriel','Sarah','Arthur','Inès','Adam','Jade','Raphaël','Anaïs','Nathan','Louise','Léo','Zoé','Maël','Romane','Théo','Lucie','Ethan','Juliette','Tom','Pauline','Mathéo','Ambre','Sacha','Margot','Liam','Élise','Mathis','Clara','Aaron','Eva','Benjamin','Alice','Noah','Lina','Maxime','Charlotte','Victor','Mila'],
+    lastNames: ['Dupont','Bernard','Martin','Petit','Robert','Richard','Dubois','Moreau','Laurent','Simon','Michel','Lefebvre','Leroy','Roux','David','Bertrand','Morel','Fournier','Girard','Bonnet','Dupuy','Lambert','Fontaine','Rousseau','Vincent','Mercier','Blanc','Guerin','Boyer','Garnier','Chevalier','François','Legrand','Gauthier','Perrin','Robin','Clément','Morin','Nicolas','Henry','Roussel','Mathieu','Gautier','Masson','Marchand','Duval','Denis','Dumont','Lemaire','Renaud'],
+    departments: {executive:'Direction',finance:'Finance',hr:'Ressources Humaines',it:'Informatique',sales:'Ventes',marketing:'Marketing',legal:'Juridique',ops:'Opérations'},
+    extraRegulations: ['Loi Informatique et Libertés','CNIL Guidelines']
+  },
+  slavic: {
+    code: 'slavic', name: 'Slavic (RU/PL/CZ)', flag: '🇵🇱',
+    emailTlds: ['ru','pl','cz'],
+    phonePrefix: '+48',
+    offices: [['HQ','ulica Marszałkowska 100','Warszawa','','00-001','PL'],['MOW','Tverskaya 7','Moskva','','125009','RU'],['PRG','Václavské náměstí 30','Praha','','11000','CZ'],['KRA','Rynek Główny 25','Kraków','','31-008','PL']],  // rotate
+    legalSuffixes: ['OOO','Sp. z o.o.','s.r.o.'],
+    firstNames: ['Aleksei','Anna','Dmitri','Olga','Pavel','Katya','Jan','Magdalena','Petr','Alena','Mikhail','Tatiana','Sergei','Natalia','Tomasz','Václav','Jana','Andrei','Yulia','Krzysztof','Agnieszka','Lucie','Vladimir','Elena','Wojciech','Boris','Svetlana','Igor','Daria','Karol','Ewa','Roman','Iva','Nikolai','Veronika','Adam','Zofia','Stanislav','Hana','Marek','Ivan','Klara','Alexei','Petra','Jakub','Bara','Piotr','Aleksandra','Lubomir','Katarzyna'],
+    lastNames: ['Ivanov','Smirnov','Kuznetsov','Popov','Sokolov','Vasiliev','Petrov','Mikhailov','Volkov','Pavlov','Kowalski','Nowak','Wiśniewski','Wójcik','Kowalczyk','Kamiński','Zieliński','Szymański','Lewandowski','Mazur','Novák','Svoboda','Novotný','Dvořák','Černý','Procházka','Kučera','Veselý','Horák','Krejčí','Soloviev','Lebedev','Kozlov','Novikov','Morozov','Romanov','Fedorov','Egorov','Wojciechowski','Krawczyk','Kaczmarek','Mazurek','Sedláček','Pokorný','Kratochvíl','Beneš','Sokol','Hájek','Marek','Růžička'],
+    departments: {executive:'Руководство',finance:'Финансы',hr:'Кадры',it:'ИТ',sales:'Продажи',marketing:'Маркетинг',legal:'Юридический',ops:'Операции'},
+    extraRegulations: ['152-FZ (Russia)','RODO/Polish DPA','Czech Act 110/2019']
+  },
+  es: {
+    code: 'es', name: 'Spain', flag: '🇪🇸',
+    emailTlds: ['es'],
+    phonePrefix: '+34',
+    offices: [['HQ','Calle de Alcalá 25','Madrid','','28014','ES'],['BCN','Passeig de Gràcia 100','Barcelona','','08008','ES'],['VLC','Avenida del Puerto 30','València','','46021','ES'],['SEV','Avenida de la Constitución','Sevilla','','41001','ES']],
+    legalSuffixes: ['S.A.','S.L.'],
+    firstNames: ['Antonio','María','José','Carmen','Manuel','Ana','Javier','Lucía','Francisco','Sara','David','Laura','Juan','Paula','Daniel','Marta','Jesús','Cristina','Carlos','Elena','Ángel','Isabel','Miguel','Rocío','Rafael','Alba','Pedro','Andrea','Pablo','Patricia','Luis','Sofía','Sergio','Natalia','Fernando','Inés','Jorge','Beatriz','Alejandro','Sandra','Diego','Lorena','Adrián','Carla','Mario','Rebeca','Iván','Mónica','Rubén','Silvia'],
+    lastNames: ['García','Rodríguez','González','Fernández','López','Martínez','Sánchez','Pérez','Gómez','Martín','Jiménez','Ruiz','Hernández','Díaz','Moreno','Muñoz','Álvarez','Romero','Alonso','Gutiérrez','Navarro','Torres','Domínguez','Vázquez','Ramos','Gil','Ramírez','Serrano','Blanco','Suárez','Molina','Morales','Ortega','Delgado','Castro','Ortiz','Rubio','Marín','Sanz','Iglesias','Núñez','Medina','Garrido','Cortés','Castillo','Santos','Lozano','Guerrero','Cano','Prieto'],
+    departments: {executive:'Dirección',finance:'Finanzas',hr:'Recursos Humanos',it:'TI',sales:'Ventas',marketing:'Marketing',legal:'Legal',ops:'Operaciones'},
+    extraRegulations: ['LOPDGDD','CCN-CERT','Esquema Nacional de Seguridad']
+  }
+};
+
+const LOCALE_KEYS = Object.keys(LOCALES);
+
+// Company name matrix: [vertical][locale] → name
+// 9 verticals × 8 locales = 72 hand-curated cells. Falls back to {ACME} {legalSuffix} if missing.
+const COMPANY_NAMES = {
+  generic:       { us:'ACME Corp',                latam_pt:'EMPRESA GERAL Ltda',          latam_es:'COMPAÑÍA GENERAL S.A.',  uk:'GLOBEX Ltd',                de:'ALLGEMEIN GmbH',          it:'GENERALE S.p.A.',                 fr:'ENTREPRISE GÉNÉRALE SAS',     slavic:'OBSHCHESTVO OOO',     es:'EMPRESA GENERAL S.L.' },
+  healthcare:    { us:'MERIDIAN HEALTH Inc',      latam_pt:'CLÍNICA BRASIL S.A.',         latam_es:'CLÍNICA SUDAMERICANA S.A.', uk:'NHS PARTNERS Plc',       de:'MEDIKLINIK GmbH',         it:'SALUTE ROMA S.p.A.',              fr:'SANTÉ NATIONALE SA',          slavic:'MEDSERVIS OOO',       es:'SALUD HISPANIA S.L.' },
+  finance:       { us:'SUMMIT FINANCIAL Inc',     latam_pt:'BANCO ATLÂNTICO S.A.',        latam_es:'BANCO ATLÁNTICO S.A.',   uk:'STERLING CAPITAL Plc',      de:'HANSAFINANZ GmbH',        it:'BANCA TIBERIA S.p.A.',            fr:'CRÉDIT GAULOIS SA',           slavic:'FINBANK OOO',         es:'BANCO IBERIA S.A.' },
+  manufacturing: { us:'TITAN INDUSTRIES Inc',     latam_pt:'INDÚSTRIA AMAZÔNICA Ltda',    latam_es:'INDUSTRIA ANDINA S.A.',  uk:'BRITANNIA MANUFACTURING Plc', de:'STAHLWERK BRANDT GmbH', it:'INDUSTRIA TORINO S.p.A.',         fr:'MANUFACTURE DU NORD SAS',     slavic:'PROMSTAL OOO',        es:'INDUSTRIAS IBÉRICAS S.L.' },
+  engineering:   { us:'NEXUSCLOUD Inc',           latam_pt:'TECHNOSUL Ltda',              latam_es:'TECHNOSUR S.A.',         uk:'CLOUDSPHERE Plc',           de:'TECHNIK SOLUTIONS GmbH',  it:'INNOVATECH MILANO S.p.A.',        fr:'NUMÉRIQUE FRANCE SAS',        slavic:'SOFTSERVIS OOO',      es:'TECNOLÓGICA IBÉRICA S.L.' },
+  federal:       { us:'METRO COUNTY GOV',         latam_pt:'GOVERNO MUNICIPAL',           latam_es:'GOBIERNO MUNICIPAL',     uk:'HM PUBLIC SERVICES',        de:'BUNDESVERWALTUNG',        it:'PUBBLICA AMMINISTRAZIONE',        fr:'ADMINISTRATION PUBLIQUE',     slavic:'GOSUDARSTVO',         es:'ADMINISTRACIÓN PÚBLICA' },
+  education:     { us:'GREATPLAINS UNIVERSITY',   latam_pt:'UNIVERSIDADE DO SUL',         latam_es:'UNIVERSIDAD DEL SUR',    uk:'NORTHUMBRIA COLLEGE',       de:'UNIVERSITÄT HOHEFELD',    it:'UNIVERSITÀ DI ROMA TIBERINA',     fr:'UNIVERSITÉ DE LA SORBONNE-NORD', slavic:'UNIVERSITET MOSKVA', es:'UNIVERSIDAD COMPLUTENSE DEL ESTE' },
+  retail:        { us:'TRENDMART Inc',            latam_pt:'COMERCIO BRASIL Ltda',        latam_es:'COMERCIO HISPANIA S.A.', uk:'ALBION RETAIL Plc',         de:'KAUFHAUS MERIDIAN GmbH',  it:'COMMERCIO MILANO S.p.A.',         fr:'GRAND COMPTOIR SAS',          slavic:'TORGSERVIS OOO',      es:'COMERCIO IBÉRICO S.L.' },
+  energy:        { us:'PACIFICPOWER Corp',        latam_pt:'ENERGIA AMAZÔNICA S.A.',      latam_es:'ENERGÍA ANDINA S.A.',    uk:'NORTHGRID Plc',             de:'RHEINKRAFT GmbH',         it:'TIRRENO ENERGIA S.p.A.',          fr:'ÉNERGIE GAULOISE SA',         slavic:'ENERGOSNAB OOO',      es:'IBERPOWER S.A.' }
+};
+
+// Helpers — all return safe defaults if locale missing (back-compat for old configs)
+// v3.2.5: getLocale is the single choke point every generator call goes through for
+// names/offices/phone format — layering overrides in here means the "Edit Region Data" drawer
+// affects real generation without needing to touch every call site individually.
+const getLocale = (cfg) => {
+  const base = LOCALES[cfg?.global?.locale] || LOCALES.us;
+  const ov = cfg?.localeOverrides?.[cfg?.global?.locale];
+  if (!ov) return base;
+  return {
+    ...base,
+    firstNames: ov.firstNames?.length ? ov.firstNames : base.firstNames,
+    lastNames: ov.lastNames?.length ? ov.lastNames : base.lastNames,
+    offices: ov.offices?.length ? ov.offices : base.offices,
+  };
+};
+const getCompanyName = (cfg) => {
+  const v = cfg?.global?.vertical || 'generic';
+  const l = cfg?.global?.locale || 'us';
+  return COMPANY_NAMES[v]?.[l] || COMPANY_NAMES.generic[l] || COMPANY_NAMES.generic.us;
+};
+// For LATAM/Slavic rotate-per-call: deterministic-per-index so multiple calls in same run are realistic
+const pickEmailTld = (cfg, idx=0) => {
+  const loc = getLocale(cfg);
+  return loc.emailTlds[idx % loc.emailTlds.length];
+};
+const pickLegalSuffix = (cfg, idx=0) => {
+  const loc = getLocale(cfg);
+  return loc.legalSuffixes[idx % loc.legalSuffixes.length];
+};
+
+// v3.1.0: normalize a name part for sam/UPN/email construction.
+// Handles common European special chars that NFD-strip alone doesn't cover (ß, æ, ø, œ).
+// "Müller" → "mueller" | "São" → "sao" | "Léa" → "lea" | "Weiß" → "weiss" | "D'Angelo" → "dangelo"
+function normalizeNamePart(s) {
+  return (s||'')
+    .replace(/ß/g, 'ss')
+    .replace(/Ä/g,'Ae').replace(/Ö/g,'Oe').replace(/Ü/g,'Ue')
+    .replace(/ä/g,'ae').replace(/ö/g,'oe').replace(/ü/g,'ue')
+    .replace(/æ/g,'ae').replace(/Æ/g,'AE')
+    .replace(/ø/g,'o').replace(/Ø/g,'O')
+    .replace(/œ/g,'oe').replace(/Œ/g,'OE')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+// v3.1.0-beta3: derive AD-style domain name + FQDN base from a regional company name.
+// "CLÍNICA BRASIL S.A." → { adName: 'CLINICABRASIL', fqdnBase: 'clinica-brasil' }
+function deriveDomainFromCompany(companyName) {
+  let clean = (companyName||'').normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  // Strip legal suffixes — order matters: longer/more-specific first
+  clean = clean.replace(/\s+(S\.p\.A\.|S\.r\.l\.|S\.A\.S\.|S\.A\.C\.|S\.R\.L\.|S\.A\. de C\.V\.|S\.A\.|S\.L\.|Sp\. z o\.o\.|s\.r\.o\.|EIRELI|GmbH|SARL|Ltda|Corp|Plc|Inc|LLC|SAS|OOO|Ltd|KG|AG|SA)\s*$/i, '').trim();
+  // Collapse internal whitespace
+  clean = clean.replace(/\s+/g, ' ');
+
+  let adName = clean.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (adName.length > 16) adName = adName.substring(0, 16);
+
+  let fqdnBase = clean.toLowerCase().split(/\s+/).join('-').replace(/[^a-z0-9-]/g, '');
+  if (fqdnBase.length > 24) {
+    // Fall back to first 2 words if full name is too long for a clean domain
+    fqdnBase = clean.toLowerCase().split(/\s+/).slice(0, 2).join('-').replace(/[^a-z0-9-]/g, '');
+  }
+
+  return { adName, fqdnBase };
+}
+
+// v3.1.0-beta: cascade locale change → updates domain, taxonomies, SPO URLs, FS hostnames.
+// v3.1.0-beta5: delegates to applyVerticalTemplate after setting locale, so SPO/FS refresh too.
+function applyLocaleChange(cfg, newLocaleKey) {
+  const newLoc = LOCALES[newLocaleKey] || LOCALES.us;
+  const oldLoc = LOCALES[cfg?.global?.locale] || LOCALES.us;
+
+  // Step 1: set new locale, then let applyVerticalTemplate recompute domain/SPO/FS based on it
+  let updated = { ...cfg, global: { ...cfg.global, locale: newLocaleKey } };
+  updated = applyVerticalTemplate(updated, updated.global.vertical || 'generic');
+
+  // v3.2.0: locale no longer injects fictional regional-regulation "taxonomies" — none of the
+  // old extraRegulations names (LGPD, BDSG, RODO, etc.) correspond to a real AA26 Sensitive Data
+  // Pattern group, so keeping that cascade would just reintroduce the fictional/real mismatch
+  // this rework removes. Vertical selection alone now drives sd.enabledGroups.
+  return updated;
+}
+
+
 // V2.6.8: Apply a vertical template to a cfg — returns new cfg with merged values.
 // Non-destructive for global counts (userCount, groupCount, etc.) — only replaces names/structure.
 const applyVerticalTemplate = (cfg, verticalKey) => {
   const tpl = VERTICAL_TEMPLATES[verticalKey];
-  if (!tpl || verticalKey === 'generic') return {...cfg, global:{...cfg.global, vertical:verticalKey}};
+  const locale = LOCALES[cfg?.global?.locale] || LOCALES.us;
+  const isUsBaseline = (cfg.global?.locale || 'us') === 'us';
+
+  // v3.1.0-beta3: derive domain name+fqdn from regional company name when non-US
+  // For 'generic' vertical: still need to apply regional domain even without a template
+  if (!tpl || verticalKey === 'generic') {
+    let genDomainName, genDomainFqdn;
+    if (isUsBaseline) {
+      genDomainName = 'ACME';
+      genDomainFqdn = 'acme.local';
+    } else {
+      const company = COMPANY_NAMES.generic?.[cfg.global.locale];
+      const derived = deriveDomainFromCompany(company);
+      genDomainName = derived.adName;
+      genDomainFqdn = `${derived.fqdnBase}.${locale.emailTlds[0]}`;
+    }
+    // Refresh FS hostnames + SPO tenant URLs to current regional domain
+    const genSpoTenant = genDomainName.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const genFs = cfg.fs?.hosts?.length ? {...cfg.fs, hosts: cfg.fs.hosts.map(h => ({
+      ...h, hostname: `${(h.hostname||'fs01').split('.')[0]}.${genDomainFqdn}`,
+    }))} : cfg.fs;
+    const genSpo = cfg.spo?.tenants?.length ? {...cfg.spo, tenants: cfg.spo.tenants.map(tnt => {
+      const isMy = (tnt.url||'').includes('-my.sharepoint.com');
+      const newTenantUrl = `https://${genSpoTenant}${isMy?'-my':''}.sharepoint.com`;
+      return {...tnt, url: newTenantUrl, sites: (tnt.sites||[]).map(s => ({...s,
+        url: (s.url||'').replace(/^https:\/\/[^/]+/, newTenantUrl),
+      }))};
+    })} : cfg.spo;
+    return {...cfg, global:{...cfg.global, vertical:verticalKey, domainName:genDomainName, domainFqdn:genDomainFqdn}, fs:genFs, spo:genSpo};
+  }
 
   // 1) Global: domain + tenant
+  // For US: use vertical's hardcoded themed TLD (.health/.edu/.gov/.bank — preserves brand identity)
+  // For non-US: derive both name and FQDN from regional company name in COMPANY_NAMES matrix
+  let newDomainName, newDomainFqdn;
+  if (isUsBaseline) {
+    newDomainName = tpl.domain?.name || cfg.global.domainName;
+    newDomainFqdn = tpl.domain?.fqdn || cfg.global.domainFqdn;
+  } else {
+    const company = COMPANY_NAMES[verticalKey]?.[cfg.global.locale] || COMPANY_NAMES.generic[cfg.global.locale];
+    const derived = deriveDomainFromCompany(company);
+    newDomainName = derived.adName;
+    newDomainFqdn = `${derived.fqdnBase}.${locale.emailTlds[0]}`;
+  }
+
   const newGlobal = {
     ...cfg.global,
     vertical: verticalKey,
-    domainName: tpl.domain?.name || cfg.global.domainName,
-    domainFqdn: tpl.domain?.fqdn || cfg.global.domainFqdn,
+    domainName: newDomainName,
+    domainFqdn: newDomainFqdn,
     sidBase: tpl.domain?.sidBase || cfg.global.sidBase,
   };
 
   // 2) AD departments
   const newAd = {...cfg.ad, departments: tpl.departments || cfg.ad.departments};
 
-  // 3) FS hosts/shares
+  // 3) FS hosts/shares — hostnames become FQDNs using current (regional) domain
+  // v3.1.0-beta5: fs01 → fs01.meridianhealth.health (US) or fs01.clinica-brasil.com.br (LATAM-PT)
   let newFs = cfg.fs;
   if (tpl.fsShares) {
     newFs = {...cfg.fs, hosts: tpl.fsShares.map(h => ({
-      hostname: h.host,
+      hostname: `${h.host}.${newDomainFqdn}`,
       os: h.os,
       shares: h.shares.map(s => ({...s})),
     }))};
+  } else if (cfg.fs?.hosts?.length) {
+    // No template fsShares (e.g. generic vertical) — refresh existing hosts' FQDNs to current domain
+    newFs = {...cfg.fs, hosts: cfg.fs.hosts.map(h => ({
+      ...h,
+      hostname: `${(h.hostname||'fs01').split('.')[0]}.${newDomainFqdn}`,
+    }))};
   }
 
-  // 4) SPO tenants/sites
+  // 4) SPO tenants/sites — tenant prefix derives from regional company (US uses tpl.spoTenant; non-US derives from domainName)
+  // v3.1.0-beta5: meridianhealth.sharepoint.com (US) → clinicabrasil.sharepoint.com (LATAM-PT)
+  const spoTenant = isUsBaseline
+    ? (tpl.spoTenant || newDomainName.toLowerCase().replace(/[^a-z0-9]/g, ''))
+    : newDomainName.toLowerCase().replace(/[^a-z0-9]/g, '');
   let newSpo = cfg.spo;
-  if (tpl.spoSites && tpl.spoTenant) {
-    const mainUrl = `https://${tpl.spoTenant}.sharepoint.com`;
-    const myUrl = `https://${tpl.spoTenant}-my.sharepoint.com`;
+  if (tpl.spoSites && spoTenant) {
+    const mainUrl = `https://${spoTenant}.sharepoint.com`;
+    const myUrl = `https://${spoTenant}-my.sharepoint.com`;
     const sites = tpl.spoSites.map(s => ({
       name: s.name,
       url: `${mainUrl}/sites/${s.pathSuffix}`,
@@ -504,7 +778,7 @@ const applyVerticalTemplate = (cfg, verticalKey) => {
     }));
     const odSites = (tpl.onedriveUsers || []).map(uname => ({
       name: `OneDrive - ${uname.replace(/_/g,' ')}`,
-      url: `${myUrl}/personal/${uname.toLowerCase()}_${tpl.spoTenant}_${(tpl.domain?.fqdn||'').replace(/\./g,'_')}`,
+      url: `${myUrl}/personal/${uname.toLowerCase()}_${spoTenant}_${newDomainFqdn.replace(/\./g,'_')}`,
       type: 'onedrive',
       docs: 40 + Math.floor(Math.random()*30),
       sensitiveRate: 30 + Math.floor(Math.random()*30),
@@ -514,22 +788,44 @@ const applyVerticalTemplate = (cfg, verticalKey) => {
       {url: mainUrl, sites: sites},
       {url: myUrl, sites: odSites},
     ]};
+  } else if (cfg.spo?.tenants?.length && spoTenant) {
+    // No template spoSites (e.g. generic vertical) — rewrite existing tenant URLs to current SPO prefix
+    const mainUrl = `https://${spoTenant}.sharepoint.com`;
+    const myUrl = `https://${spoTenant}-my.sharepoint.com`;
+    newSpo = {...cfg.spo, tenants: cfg.spo.tenants.map(tnt => {
+      const isMy = (tnt.url||'').includes('-my.sharepoint.com');
+      const newTenantUrl = isMy ? myUrl : mainUrl;
+      return {
+        ...tnt,
+        url: newTenantUrl,
+        sites: (tnt.sites||[]).map(s => ({
+          ...s,
+          url: (s.url||'').replace(/^https:\/\/[^/]+/, newTenantUrl),
+        })),
+      };
+    })};
   }
 
-  // 5) Sensitive data taxonomies — enable the ones in tpl.taxonomies
+  // 5) Sensitive data — vertical selection directly replaces which real AA26 Sensitive Data
+  // Pattern groups are emphasized (v3.2.0: no more fictional regional-regulation merging —
+  // see applyLocaleChange for why that was removed).
   let newSd = cfg.sd;
   if (tpl.taxonomies) {
-    const enabledSet = new Set(tpl.taxonomies);
-    newSd = {...cfg.sd, taxonomies: cfg.sd.taxonomies.map(t => ({
-      ...t,
-      enabled: enabledSet.has(t.name),
-    }))};
+    newSd = {...cfg.sd, enabledGroups: tpl.taxonomies};
   }
 
   return {...cfg, global:newGlobal, ad:newAd, fs:newFs, spo:newSpo, sd:newSd};
 };
 const uuid=()=>"xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g,c=>{const r=Math.random()*16|0;return(c==="x"?r:r&0x3|0x8).toString(16)});
 const pick=a=>a[Math.floor(Math.random()*a.length)];
+// v3.2.6: real orgs often accept mail/UPN logins across several domains (alternate UPN
+// suffixes) even though there's still one AD forest/domain underneath. Primary domain stays
+// dominant; additional domains (if any) get mixed into a realistic minority of users.
+const pickEmailDomain=(cfg)=>{
+  const extra=cfg.global?.additionalDomains||[];
+  if(!extra.length||Math.random()<0.6)return cfg.global.domainFqdn;
+  return pick(extra);
+};
 const esc=s=>String(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");
 const fmt=n=>typeof n==="number"?n.toLocaleString():n;
 
@@ -575,6 +871,18 @@ function pickActivityTime(baseNow, daysAgo, pattern){
   return date;
 }
 // Activity date generator: ~40% within last 7 days, rest spread over maxDays
+// v3.2.0: pick a real Sensitive Data Pattern match — uses the live-discovered catalog
+// (cfg._sdCatalog, populated by Detect Session) when available, otherwise falls back to
+// matching on the group name alone (no individual pattern name known pre-connect).
+function pickSdMatch(cfg){
+  const groups=(cfg.sd?.enabledGroups||[]).length?cfg.sd.enabledGroups:['PII'];
+  const groupName=pick(groups);
+  const catalog=cfg._sdCatalog;
+  const candidates=(catalog&&catalog.byGroup&&catalog.byGroup[groupName]&&catalog.byGroup[groupName].length)
+    ? catalog.byGroup[groupName] : [{name:groupName,confidence:'medium'}];
+  const p=pick(candidates);
+  return {groupName, patternName:p.name, confidence:p.confidence||'medium'};
+}
 const activityDate=(now,maxDays=180)=>{
   // V2.6.6: 60% in last 7 days, 20% in 7-30 days, 20% in 30-maxDays.
   // Aggressively recent so reports with default "Previous 7 days" filters populate immediately.
@@ -602,7 +910,7 @@ const chDefault=(colType)=>{
 /* ─── Default Config ──────────────────────────────────── */
 const DEFAULT_CONFIG = {
   connection:{url:"https://appaa.cloud.lab",username:"administrator@cloud.lab",password:"",method:"clickhouse_http",ch_host:"localhost",ch_port:8123,ch_user:"default",ch_pass:"",aa26Host:"appaa.cloud.lab",aa26SessionCookie:""},
-  global:{vertical:"generic",domainName:"ACME",domainFqdn:"acme.local",sidBase:"S-1-5-21-3298745201-1587429463-2190384756",tenantId:"a1b2c3d4-e5f6-7890-abcd-ef1234567890",historyMonths:2,scanFreqDays:14,richActivityTimeline:0,batchOffset:0,activityPattern:{enabled:false,workStart:9,workEnd:17,lunchDip:true,nightActivity:false,weekendActivity:false}},
+  global:{vertical:"generic",locale:"us",domainName:"ACME",domainFqdn:"acme.local",additionalDomains:[],sidBase:"S-1-5-21-3298745201-1587429463-2190384756",tenantId:"a1b2c3d4-e5f6-7890-abcd-ef1234567890",historyMonths:2,scanFreqDays:14,richActivityTimeline:0,batchOffset:0,activityPattern:{enabled:false,workStart:9,workEnd:17,lunchDip:true,nightActivity:false,weekendActivity:false}},
   ad:{enabled:true,userCount:200,groupCount:60,departments:[
     {name:"IT",weight:12,subs:["Infrastructure","Security","Development","Help Desk"]},
     {name:"Finance",weight:10,subs:["Accounting","Treasury","Audit"]},
@@ -658,24 +966,36 @@ const DEFAULT_CONFIG = {
       {name:"OneDrive - Marketing Mgr",url:"https://acme-my.sharepoint.com/personal/marketingmgr_acme_local",type:"onedrive",docs:35,sensitiveRate:10,libraries:["Documents"]}
     ]}
   ],externalSharing:5},
-  sd:{enabled:true,taxonomies:[
-    {name:"PII",region:"US",terms:["US SSN","Driver License Number","Passport Number","Date of Birth","Email Address","Phone Number","Mailing Address","Mother Maiden Name"],enabled:true},
-    {name:"PHI",region:"US",terms:["Patient ID","Medical Record Number","Diagnosis Code","Insurance ID","Prescription Number","Lab Results","Treatment Plan"],enabled:true},
-    {name:"PCI DSS",region:"Global",terms:["Credit Card Number","Bank Account Number","Routing Number","CVV","Cardholder Name","Expiration Date","PIN"],enabled:true},
-    {name:"Financial",region:"US",terms:["Tax ID","W2 Form","1099 Form","Salary Information","Account Balance","Investment Account","Wire Transfer"],enabled:true},
-    {name:"Credentials",region:"Global",terms:["API Key","Password Hash","SSH Key","Certificate","Connection String","Access Token","Secret Key","Private Key"],enabled:true},
-    {name:"GDPR",region:"EU",terms:["EU National ID","IBAN","EU Tax ID","EU Passport","EU Driver License","EU Health Insurance Number","Biometric Data Reference","Racial/Ethnic Origin","Political Opinion","Religious Belief","Trade Union Membership","Genetic Data Reference"],enabled:true},
-    {name:"CCPA",region:"US-CA",terms:["California ID","Geolocation Data","Biometric Information","Browsing History Reference","Consumer Profile","Household Data"],enabled:true},
-    {name:"HIPAA",region:"US",terms:["Protected Health Information","Health Plan Beneficiary","Medical Device ID","Biometric Identifier","Full Face Photo","Health Record Number"],enabled:true},
-    {name:"SOX",region:"US",terms:["Financial Statement Data","Internal Control Document","Audit Trail Record","Executive Compensation","Revenue Recognition","Material Weakness"],enabled:true},
-    {name:"CMMC",region:"US-DoD",terms:["Controlled Unclassified Information","CUI Basic","CUI Specified","Federal Contract Information","ITAR Data","Export Controlled Data","FOUO Document"],enabled:true},
-    {name:"GLBA",region:"US",terms:["Financial Account Number","Credit Report Data","Insurance Policy Number","Loan Application Data","Net Worth Information"],enabled:true},
-    {name:"FERPA",region:"US",terms:["Student ID","Education Record","GPA Data","Disciplinary Record","Financial Aid Record","Enrollment Status"],enabled:false},
-    {name:"NIST 800-171",region:"US",terms:["CUI Category Marking","NIST Control Reference","System Security Plan","POA&M Item","Assessment Finding"],enabled:false},
-    {name:"PIPEDA",region:"CA",terms:["Canadian SIN","Canadian Passport","Canadian Health Card","Canadian Driver License"],enabled:false},
-    {name:"LGPD",region:"BR",terms:["Brazilian CPF","Brazilian RG","Brazilian CNPJ","Brazilian Voter ID"],enabled:false},
-    {name:"Legal",region:"Global",terms:["Contract Number","NDA Reference","Patent Number","Case Number","Attorney-Client Privilege","Court Order"],enabled:true}
-  ]},
+  // v3.2.0: replaced the fictional hardcoded taxonomy/term list with the real AA26 Sensitive
+  // Data Pattern Groups — confirmed live via GraphQL against AA26 v1.1.5 (11 built-in groups).
+  // This fallback list is used until the AA26 REST API session connects and discovers the
+  // real catalog (which also picks up any custom groups/patterns the user has added in AA26).
+  // enabledGroups controls which groups get emphasized when generating sensitive-data hits.
+  sd:{enabled:true,enabledGroups:["PII","PHI","PCI DSS","Financial Records","Credentials","GDPR","GDPR Restricted","CCPA","HIPAA","CMMC","GLBA"],
+  // v3.0.1: MIP Labels (Microsoft Information Protection) — link sensitive data types to MIP sensitivity labels
+  mipLabels:{
+    enabled:true,
+    labels:[
+      {id:"public",name:"Public",description:"Anyone can access. No sensitivity classification required.",priority:0,color:"#22c55e"},
+      {id:"internal",name:"Internal",description:"For internal use only. Default classification for most content.",priority:1,color:"#3b82f6"},
+      {id:"confidential",name:"Confidential",description:"Sensitive information requiring protection. Limited distribution.",priority:2,color:"#f59e0b"},
+      {id:"highly_confidential",name:"Highly Confidential",description:"Most sensitive data. Encryption + access controls required.",priority:3,color:"#ef4444"}
+    ],
+    // Map AA26 data type IDs (hardcoded by AA26 backend) → our label IDs
+    mappings:{
+      ccpa:"confidential",
+      cmmc:"highly_confidential",
+      credentials:"highly_confidential",
+      financial_records:"confidential",
+      gdpr:"confidential",
+      gdpr_restricted:"highly_confidential",
+      glba:"confidential",
+      hipaa:"highly_confidential",
+      pci_dss:"highly_confidential",
+      phi:"highly_confidential",
+      pii:"confidential"
+    }
+  }},
   rehydration:{enabled:true,frequency:"daily",windowDays:180}
 };
 
@@ -692,8 +1012,13 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
   const users=[];
   if(cfg.ad.enabled){
     onProgress&&onProgress("[Phase 1/5] Generating AD users...");await tick();const used=new Set(),tw=cfg.ad.departments.reduce((s,d)=>s+d.weight,0);
+    // v3.1.0: Pull name pool, offices, phone format from current locale (region) — falls back to US if locale missing
+    const _loc = getLocale(cfg);
+    const _firsts = _loc.firstNames, _lasts = _loc.lastNames;
+    const _offices = _loc.offices || [["HQ","100 Innovation Drive","Austin","TX","78701","US"]];
+    const _phonePrefix = _loc.phonePrefix || '+1';
     for(let i=0;i<cfg.ad.userCount;i++){let r=Math.random()*tw,dept=cfg.ad.departments[0];for(const d of cfg.ad.departments){r-=d.weight;if(r<=0){dept=d;break;}}
-    let sam,f,l;do{f=pick(FIRST_NAMES);l=pick(LAST_NAMES);sam=`${f[0].toLowerCase()}${l.toLowerCase()}`;}while(used.has(sam));used.add(sam);
+    let sam,f,l;do{f=pick(_firsts);l=pick(_lasts);sam=`${normalizeNamePart(f).charAt(0)}${normalizeNamePart(l)}`;}while(used.has(sam));used.add(sam);
     const sub=pick(dept.subs),g=uuid(),s=nextSid(),da=30+Math.floor(Math.random()*1800),cr=new Date(now-da*864e5),ch=new Date(cr.getTime()+Math.random()*da*864e5);
     const dn=`CN=${f} ${l},OU=${sub},OU=${dept.name},DC=${cfg.global.domainFqdn.split(".")[0]},DC=${cfg.global.domainFqdn.split(".")[1]}`;
     const en=Math.random()>.03, isAdmin=i<cfg.ad.risks.adminCount;
@@ -704,13 +1029,12 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     const lastLogon=isStale?new Date(now-(91+Math.floor(Math.random()*274))*864e5):isNoLogon?null:new Date(now-Math.floor(Math.random()*30)*864e5);
     const pwdLastSet=isOldPwd?new Date(now-(91+Math.floor(Math.random()*600))*864e5):new Date(now-Math.floor(Math.random()*89)*864e5);
     const uac=en?(isPNE?66048:512):514;
-    // Personal data
-    const OFFICES=[["HQ","100 Innovation Drive","Austin","TX","78701","US"],["NYC","350 5th Avenue","New York","NY","10118","US"],["SFO","101 Market Street","San Francisco","CA","94105","US"],["LON","30 Finsbury Square","London","","EC2A 1AG","GB"],["CHI","233 S Wacker Drive","Chicago","IL","60606","US"]];
+    // Personal data — uses regional offices and phone prefix
     const TITLES={IT:["Systems Administrator","Network Engineer","Security Analyst","DevOps Engineer","IT Manager","Help Desk Technician","Cloud Architect"],Finance:["Financial Analyst","Controller","Accountant","Accounts Payable Specialist","Treasury Analyst","Compliance Officer"],"Human Resources":["HR Business Partner","Recruiter","Benefits Coordinator","Training Specialist","HR Director","Compensation Analyst"],Sales:["Account Executive","Sales Manager","Business Development Rep","Sales Engineer","VP of Sales","Regional Sales Director"],Engineering:["Software Engineer","Senior Developer","QA Engineer","Engineering Manager","Principal Architect","Tech Lead"],Legal:["Corporate Counsel","Legal Assistant","Compliance Manager","Contract Specialist","General Counsel"],Operations:["Operations Manager","Supply Chain Analyst","Facilities Coordinator","Procurement Specialist","Operations Director"],Executive:["Chief Executive Officer","Chief Financial Officer","Chief Technology Officer","VP of Strategy","Chief Operating Officer"],Research:["Research Scientist","Data Analyst","Lab Manager","Research Director","Biostatistician"],"Customer Support":["Support Engineer","Customer Success Manager","Technical Writer","Support Team Lead","Escalation Manager"]};
-    const office=pick(OFFICES);
+    const office=pick(_offices);
     const jobTitle=TITLES[dept.name]?pick(TITLES[dept.name]):(sub||dept.name+" Specialist");
-    const phone=`+1-${office[3]==="GB"?"20":String(200+Math.floor(Math.random()*800))}-${String(100+Math.floor(Math.random()*900))}-${String(1000+Math.floor(Math.random()*9000))}`;
-    const mobile=`+1-${String(200+Math.floor(Math.random()*800))}-${String(100+Math.floor(Math.random()*900))}-${String(1000+Math.floor(Math.random()*9000))}`;
+    const phone=`${_phonePrefix}-${String(20+Math.floor(Math.random()*80))}-${String(100+Math.floor(Math.random()*900))}-${String(1000+Math.floor(Math.random()*9000))}`;
+    const mobile=`${_phonePrefix}-${String(60+Math.floor(Math.random()*40))}-${String(100+Math.floor(Math.random()*900))}-${String(1000+Math.floor(Math.random()*9000))}`;
     const officeRoom=`${office[0]}-${String.fromCharCode(65+Math.floor(Math.random()*6))}${100+Math.floor(Math.random()*900)}`;
     const badPwdCount=Math.random()<0.05?Math.floor(Math.random()*5):0;
     users.push({g,s,sam,f,l,dn,dept:dept.name,sub,en,cr:crDate.toISOString().replace("T"," ").slice(0,19),ch:ch.toISOString().replace("T"," ").slice(0,19),adm:isAdmin,
@@ -797,7 +1121,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     // Build SQL rows for all scans
     onProgress&&onProgress("Building AD SQL rows...");
     for(const sc of tl){
-      const userRows=users.map(u=>`('${sc.sid}','${sc.eid}','${sc.ts}','${u.g}','${u.s}','${esc(u.dn)}','${u.sam}','${u.sam}@${cfg.global.domainFqdn}','${u.f} ${u.l}','${u.f}','${u.l}',${u.en},'${u.cr}','${u.ch}','${esc(u.dept)} - ${esc(u.sub)}',${u.adm?1:0},513,'${cfg.global.domainName}','${cfg.global.domainFqdn}','${u.f} ${u.l}','${u.f.toLowerCase()}.${u.l.toLowerCase()}@${cfg.global.domainFqdn}','${esc(u.phone)}','${esc(u.mobile)}','${esc(u.officeRoom)}','${esc(u.street)}','${esc(u.city)}','${esc(u.state)}','${esc(u.zip)}','${u.country}','${esc(u.jobTitle)}','${esc(u.dept)}','${cfg.global.domainName}',NULL,'E${10000+users.indexOf(u)}',${u.uac},'${u.pwdLastSet}',${u.pne},${u.lastLogon?"'"+u.lastLogon+"'":"NULL"},${u.lastLogon?"'"+u.lastLogon+"'":"NULL"},${u.badPwdCount},false,false)`);
+      const userRows=users.map(u=>`('${sc.sid}','${sc.eid}','${sc.ts}','${u.g}','${u.s}','${esc(u.dn)}','${u.sam}','${u.sam}@${cfg.global.domainFqdn}','${u.f} ${u.l}','${u.f}','${u.l}',${u.en},'${u.cr}','${u.ch}','${esc(u.dept)} - ${esc(u.sub)}',${u.adm?1:0},513,'${cfg.global.domainName}','${cfg.global.domainFqdn}','${u.f} ${u.l}','${normalizeNamePart(u.f)}.${normalizeNamePart(u.l)}@${cfg.global.domainFqdn}','${esc(u.phone)}','${esc(u.mobile)}','${esc(u.officeRoom)}','${esc(u.street)}','${esc(u.city)}','${esc(u.state)}','${esc(u.zip)}','${u.country}','${esc(u.jobTitle)}','${esc(u.dept)}','${cfg.global.domainName}',NULL,'E${10000+users.indexOf(u)}',${u.uac},'${u.pwdLastSet}',${u.pne},${u.lastLogon?"'"+u.lastLogon+"'":"NULL"},${u.lastLogon?"'"+u.lastLogon+"'":"NULL"},${u.badPwdCount},false,false)`);
       R[`adu_${sc.sid.slice(0,6)}`]={table:"active_directory_user",cols:"scan_id,scan_execution_id,scanned_at,object_guid,object_sid,distinguished_name,sam_account_name,user_principal_name,display_name,given_name,surname,enabled,when_created,when_changed,description,admin_count,primary_group_id,domain_name,domain_canonical_name,cn,mail,telephone_number,mobile,office,street_address,city,state,postal_code,country,job_title,department,company,manager_dn,employee_id,user_account_control,password_last_set,password_never_expires,last_logon,last_logon_timestamp,bad_pwd_count,is_deleted,hard_delete",rows:userRows};
 
       const groupRows=groups.map(g=>`('${sc.sid}','${sc.eid}','${sc.ts}','${g.g}','${g.s}','${esc(g.dn)}','${esc(g.name)}','${esc(g.name)}','${g.scope}','${g.type}',0,NULL,'${cfg.global.domainName}','${cfg.global.domainFqdn}','${esc(g.name)}',NULL,false,false)`);
@@ -811,6 +1135,21 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
   if(cfg.fs.enabled){
     onProgress&&onProgress("[Phase 2/5] Generating file system...");await tick();const oR=[],sR=[],pR=[],aR=[],spR=[];let fc=0;
     const PERMS=[['FILE_READ_DATA','FILE_EXECUTE','READ_CONTROL'],['FILE_READ_DATA','FILE_WRITE_DATA','FILE_EXECUTE','DELETE','READ_CONTROL'],['GENERIC_ALL'],['GENERIC_READ'],['FILE_READ_DATA','FILE_READ_EA','FILE_READ_ATTRIBUTES','READ_CONTROL']];
+    // v3.3.0: real AA26 normalized_permissions format (FixedString(6), confirmed against
+    // Netwrix's own FileSystem Permissions Format Reference doc): positional letters in fixed
+    // order L-R-W-D-M-A (List/Read/Write/Delete/Manage-DAC/take-Ownership), '-' where absent.
+    // Was hardcoded to the meaningless placeholder '000000' for every single row before this.
+    const normalizePerms=(permList)=>{
+      const has=(...keys)=>keys.some(k=>permList.includes(k));
+      if(has('GENERIC_ALL'))return 'LRWDMA';
+      const L=has('DIR_LIST','FILE_EXECUTE','GENERIC_EXECUTE')?'L':'-';
+      const R=has('FILE_READ_DATA','FILE_READ_EA','FILE_READ_ATTRIBUTES','GENERIC_READ')?'R':'-';
+      const W=has('FILE_WRITE_DATA','FILE_APPEND_DATA','FILE_WRITE_EA','FILE_WRITE_ATTRIBUTES','DIR_ADD_FILE','DIR_ADD_SUB_DIR','GENERIC_WRITE')?'W':'-';
+      const D=has('DELETE','FILE_DELETE_CHILD','DIR_DELETE_CHILD')?'D':'-';
+      const M=has('WRITE_DAC')?'M':'-';
+      const A=has('WRITE_OWNER')?'A':'-';
+      return L+R+W+D+M+A;
+    };
     const HIGH_RISK_PERMS=[['GENERIC_ALL'],['FILE_READ_DATA','FILE_WRITE_DATA','FILE_EXECUTE','DELETE','READ_CONTROL','WRITE_DAC'],['GENERIC_READ','GENERIC_WRITE']];
     // Well-known SIDs for High Risk ACLs and Open Access reports
     const WELLKNOWN_SIDS=['S-1-1-0','S-1-5-11',`${cfg.global.sidBase}-513`]; // Everyone, Authenticated Users, Domain Users
@@ -838,16 +1177,16 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
         for(const sc of tl)oR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${h.hostname}','${esc(nsName)}','${esc(nsPath)}','${esc(nsRoot)}','SHARE','','${esc(nsName)}','',0,'${shareOSid}','${cfg.global.sidBase}-513','${nsCt}','${nsMt}','${nsAt}','SUCCESS','',0,false,${Math.random()<0.5},false,false,false,${1+Math.floor(Math.random()*3)},${1+Math.floor(Math.random()*2)},0,true,false)`);
         // Share-level permissions for nested shares
         for(const sc of tl){
-          spR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${cfg.global.sidBase}-513','${h.hostname}','${esc(nsName)}',['GENERIC_READ'],'000000','ALLOW',${2032127},NULL,NULL,false)`);
-          spR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','S-1-1-0','${h.hostname}','${esc(nsName)}',['FILE_READ_DATA','FILE_EXECUTE','READ_CONTROL'],'000000','ALLOW',${1179817},NULL,NULL,false)`);
+          spR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${cfg.global.sidBase}-513','${h.hostname}','${esc(nsName)}',['GENERIC_READ'],'-R----','ALLOW',${2032127},NULL,NULL,false)`);
+          spR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','S-1-1-0','${h.hostname}','${esc(nsName)}',['FILE_READ_DATA','FILE_EXECUTE','READ_CONTROL'],'LR----','ALLOW',${1179817},NULL,NULL,false)`);
         }
       }
     }
     // cifs_share_permission: Share-level permissions (powers Share Audit report)
     for(const sc of tl){
-      spR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${cfg.global.sidBase}-513','${h.hostname}','${esc(sh.name)}',['GENERIC_READ'],'000000','ALLOW',${2032127},NULL,NULL,false)`);
-      spR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','S-1-1-0','${h.hostname}','${esc(sh.name)}',['FILE_READ_DATA','FILE_EXECUTE','READ_CONTROL'],'000000','ALLOW',${1179817},NULL,NULL,false)`);
-      spR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${shareOSid}','${h.hostname}','${esc(sh.name)}',['GENERIC_ALL'],'000000','ALLOW',${2032127},NULL,NULL,false)`);
+      spR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${cfg.global.sidBase}-513','${h.hostname}','${esc(sh.name)}',['GENERIC_READ'],'-R----','ALLOW',${2032127},NULL,NULL,false)`);
+      spR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','S-1-1-0','${h.hostname}','${esc(sh.name)}',['FILE_READ_DATA','FILE_EXECUTE','READ_CONTROL'],'LR----','ALLOW',${1179817},NULL,NULL,false)`);
+      spR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${shareOSid}','${h.hostname}','${esc(sh.name)}',['GENERIC_ALL'],'LRWDMA','ALLOW',${2032127},NULL,NULL,false)`);
     }
     // DIRECTORY entries (start at di=1 to skip root — root is SHARE above)
     for(let di=1;di<dirs.length;di++){
@@ -875,11 +1214,11 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
         // BROKEN INHERITANCE: if dirProtected, ALL permissions are explicit (is_inherited=false)
         // Normal dirs: first perm explicit, rest inherited
         const isInherited=dirProtected?false:(p>0);
-        for(const sc of tl)pR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${tSid}','${h.hostname}','${esc(sh.name)}','${esc(dirPath)}',${permArr},'000000','${accType}',${accMask},3,${isInherited},NULL,NULL,false)`);
+        for(const sc of tl)pR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${tSid}','${h.hostname}','${esc(sh.name)}','${esc(dirPath)}',${permArr},'${normalizePerms(permSet)}','${accType}',${accMask},3,${isInherited},NULL,NULL,false)`);
       }
       // OPEN ACCESS FIX: if dirWorldRead, add Everyone with GENERIC_READ explicitly
       if(dirWorldRead){
-        for(const sc of tl)pR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','S-1-1-0','${h.hostname}','${esc(sh.name)}','${esc(dirPath)}',['GENERIC_READ'],'000000','ALLOW',${1179817},3,false,NULL,NULL,false)`);
+        for(const sc of tl)pR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','S-1-1-0','${h.hostname}','${esc(sh.name)}','${esc(dirPath)}',['GENERIC_READ'],'-R----','ALLOW',${1179817},3,false,NULL,NULL,false)`);
       }
     }
     // V2.6.8: vertical-aware file naming
@@ -917,7 +1256,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     if(i%3===0){const nPerms=1+Math.floor(Math.random()*3);for(let p=0;p<nPerms;p++){
       const tSid=users.length?pick(users).s:(p===0?'S-1-5-18':oSid);
       const permSet=pick(PERMS);const permArr="['"+permSet.join("','")+"']";
-      const normPerms='000000';const accType=Math.random()<0.05?'DENY':'ALLOW';const accMask=Math.floor(Math.random()*2097151);
+      const normPerms=normalizePerms(permSet);const accType=Math.random()<0.05?'DENY':'ALLOW';const accMask=Math.floor(Math.random()*2097151);
       for(const sc of tl)pR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${tSid}','${h.hostname}','${esc(sh.name)}','${esc(fp)}',${permArr},'${normPerms}','${accType}',${accMask},3,${p>0},NULL,NULL,false)`);
     }}
     // Activity — bump frequency: every 5th file gets activity (was every 20th)
@@ -928,8 +1267,10 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
       const uncPath=`\\\\${h.hostname}\\${sh.name}\\${fp}`;
       const evSuccess=Math.random()>0.08; // ~8% failure rate for "failed events"
       aR.push(`('File','aa-agent','${evType}','${esc(fp)}',${evSuccess},'${evTs}','${evTs}','File','SMB','','${h.hostname}','','${esc(sh.name)}','${esc(uncPath)}','','',${sz},0,0,0,'','${u.s}','','','','','${u.f} ${u.l}',false,false,'','','','','','','','','')`);}
-    if(cfg.sd.enabled&&Math.random()<sh.sensitiveRate/100){const tx=pick(cfg.sd.taxonomies.filter(t=>t.enabled));if(tx){const tm=pick(tx.terms);
-      for(const sc of tl)sR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${h.hostname}','${esc(sh.name)}','${esc(fp)}','${esc(tx.name)}','${esc(tm)}',${(Math.random()*2).toFixed(3)},'SDK_AUTO',false,'SUCCESS',NULL)`);
+    if(cfg.sd.enabled&&Math.random()<sh.sensitiveRate/100){const m=pickSdMatch(cfg);
+      const matchesArr=`[('${esc(m.groupName)}','${esc(m.patternName)}')]`;
+      const patternMatchesArr=`[('${esc(m.groupName)}','${esc(m.patternName)}','builtin',NULL,1)]`;
+      for(const sc of tl)sR.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${h.hostname}','${esc(sh.name)}','${esc(fp)}',${matchesArr},${patternMatchesArr},'${esc(m.groupName)}','${esc(m.groupName)}',${(Math.random()*2).toFixed(3)},'SDK_AUTO',false,'SUCCESS',NULL)`);
       // V2.6.6: Track sensitive files for "Sensitive Data Activity" report — these need recent user activity events to populate the join
       if(users.length){
         // Generate 1-3 recent (last 7 days) activity events per sensitive file
@@ -945,7 +1286,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
           aR.push(`('File','aa-agent','${evType}','${esc(fp)}',${evSuccess},'${evTs}','${evTs}','File','SMB','','${h.hostname}','','${esc(sh.name)}','${esc(uncPath)}','','',${sz},0,0,0,'','${u.s}','','','','','${u.f} ${u.l}',false,false,'','','','','','','','','')`);
         }
       }
-    }}}}
+    }}}
     // EMPTY SHARES: Add empty shares to raw cifs_object (Content > Empty Shares report)
     const emptyHost=cfg.fs.hosts[0];
     if(emptyHost){
@@ -999,7 +1340,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
       onProgress&&onProgress(`  Rich Activity Timeline: +${fmt(richCount)} historical FS events across ${richDays} days`);
     }
     if(aR.length)R.activity_json={table:"netwrix_activity_monitor_json",cols:"activity_type,agent_host,event_type,path,success,time_logged,time_reported,object_type,protocol,protocol_version,server,server_ip,share_name,unc_path,volume_id,stream_name,size,bytes_read,bytes_written,number_of_reads,user_ip,user_sid,user_group,user_group_id,user_guid,user_host,user_name,blocked,is_copy,old_attribute,new_attribute,new_path,unc_new_path,new_security_desc,old_security_desc,security_desc_diff,process_id,process_name",rows:aR};
-    if(sR.length)R.cifs_sd={table:"cifs_sensitive_data",cols:"scan_id,scan_execution_id,scanned_at,host,share_name,path,taxonomy_name,term_name,processing_time_seconds,classification_method,hard_delete,scan_status,error_message",rows:sR};
+    if(sR.length)R.cifs_sd={table:"cifs_sensitive_data",cols:"scan_id,scan_execution_id,scanned_at,host,share_name,path,matches,pattern_matches,matched_taxonomy_name,matched_pattern_group_name,processing_time_seconds,classification_method,hard_delete,scan_status,error_message",rows:sR};
 
     // Local groups — required for FS Access reports (Broken Inheritance, High Risk ACLs, Open Access, Direct User ACLs)
     if(users.length){
@@ -1080,7 +1421,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     }
     // SITE entry — one per site, repeated per scan
     const siteItemId=uuid();
-    const ownerEmail=siteOwner?`${siteOwner.f.toLowerCase()}.${siteOwner.l.toLowerCase()}@${cfg.global.domainFqdn}`:'admin@acme.local';
+    const ownerEmail=siteOwner?`${normalizeNamePart(siteOwner.f)}.${normalizeNamePart(siteOwner.l)}@${pickEmailDomain(cfg)}`:'admin@acme.local';
     const siteCreated=new Date(now-Math.floor(Math.random()*730)*864e5).toISOString().replace("T"," ").slice(0,19);
     const siteModified=new Date(now-Math.floor(Math.random()*365)*864e5).toISOString().replace("T"," ").slice(0,19);
     for(const sc of tl)spO.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${siteHost}','${siteId}','${siteItemId}','${esc(site.url)}','','','SITE','${esc(site.name)}','','${esc(new URL(site.url).pathname||"/")}',0,'${siteCreated}','${uuid()}','${ownerEmail}','${siteModified}','${uuid()}','${ownerEmail}','','SUCCESS','',true)`);
@@ -1099,7 +1440,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     // Required so spo_documents_with_site_ids can join activity events to documents.
     const driveItemId=uuid();
     site._v1DriveItems[_li].push(driveItemId); // V2.6.12: share with v2 entity generation
-    const auth=siteUserPool.length?pick(siteUserPool):null;const authEmail=auth?`${auth.f.toLowerCase()}.${auth.l.toLowerCase()}@${cfg.global.domainFqdn}`:'user@acme.local';const authName=auth?`${auth.f} ${auth.l}`:'User';const authSid=auth?auth.s:'S-1-5-21-0-0-0-0';
+    const auth=siteUserPool.length?pick(siteUserPool):null;const authEmail=auth?`${normalizeNamePart(auth.f)}.${normalizeNamePart(auth.l)}@${pickEmailDomain(cfg)}`:'user@acme.local';const authName=auth?`${auth.f} ${auth.l}`:'User';const authSid=auth?auth.s:'S-1-5-21-0-0-0-0';
     // V2.6.10: SPO v1 doc date generation — bias 30% stale (>365 days) for ROT Stale report
     const spoStaleRoll=Math.random();
     const spoModDays=spoStaleRoll<0.30?(365+Math.floor(Math.random()*730)):spoStaleRoll<0.55?(90+Math.floor(Math.random()*275)):(1+Math.floor(Math.random()*89));
@@ -1112,7 +1453,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     for(const sc of tl)spO.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${siteHost}','${siteId}','${dId}','${esc(site.url)}','${driveId}','${driveItemId}','LIST_ITEM','${esc(dn)}','${ext}','${esc(lib+"/"+dn)}',${spoFileSize},'${spoCreatedTime}','${uuid()}','${authEmail}','${spoModTime}','${uuid()}','${authEmail}','${libItemId}','SUCCESS','',true)`);
     // SPO permissions (every 2nd doc) - uses correlated user pool
     if(i%2===0){const nP=1+Math.floor(Math.random()*3);for(let p=0;p<nP;p++){
-      const pu=siteUserPool.length?pick(siteUserPool):null;const pEmail=pu?`${pu.f.toLowerCase()}.${pu.l.toLowerCase()}@${cfg.global.domainFqdn}`:'user@acme.local';const pName=pu?`${pu.f} ${pu.l}`:'User';
+      const pu=siteUserPool.length?pick(siteUserPool):null;const pEmail=pu?`${normalizeNamePart(pu.f)}.${normalizeNamePart(pu.l)}@${pickEmailDomain(cfg)}`:'user@acme.local';const pName=pu?`${pu.f} ${pu.l}`:'User';
       const pType=pick(['USER','GROUP','SITE_USER','SITE_GROUP']);const permLvl=pick(SPO_PERM_LEVELS);const basePerm=pick(SPO_BASE_PERMS);
       const permLvlArr="['"+permLvl.join("','")+"']";const basePermArr="['"+basePerm.join("','")+"']";
       for(const sc of tl)spP.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${esc(siteHost)}','${siteId}','${dId}','${uuid()}','${uuid()}','${uuid()}','${pType}','${esc(pName)}','${pEmail}','DIRECT',${permLvlArr},${basePermArr},'00000')`);
@@ -1152,7 +1493,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
       spA.push(`('${extEvType}','spo-agent','${uuid()}','SharePoint','${extEvType}','${extEvTime}','${extEvTime}','${siteHost}','${siteId}','${esc(site.url)}','${esc(site.name)}','${esc(dn)}','${esc(du)}','${esc(extLogin)}','${esc(extName)}',true,'${siteId}','${driveItemId}')`);
     }
 
-    if(cfg.sd.enabled&&Math.random()<site.sensitiveRate/100){const tx=pick(cfg.sd.taxonomies.filter(t=>t.enabled));if(tx){const tm=pick(tx.terms);for(const sc of tl)spS.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${dId}','${esc(site.url)}','${esc(du)}','${esc(tx.name)}','${esc(tm)}',${(Math.random()*2).toFixed(3)},'SDK_AUTO','SUCCESS','')`);
+    if(cfg.sd.enabled&&Math.random()<site.sensitiveRate/100){const m=pickSdMatch(cfg);const matchesArr=`[('${esc(m.groupName)}','${esc(m.patternName)}','builtin',NULL,1)]`;for(const sc of tl)spS.push(`('${sc.sid}','${sc.eid}','${sc.ts}','${dId}','${esc(site.url)}','${esc(du)}',${matchesArr},'${esc(m.groupName)}',${(Math.random()*2).toFixed(3)},'SDK_AUTO','SUCCESS','')`);
     // V2.6.9+11: Sensitive Data Activity — generate 1-3 RECENT activity events per sensitive doc, with proper web_id + drive_item_id for the report's INNER JOIN
     const numSensitiveEvents = 1 + Math.floor(Math.random() * 3);
     for (let sei = 0; sei < numSensitiveEvents; sei++) {
@@ -1161,7 +1502,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
       const sdEvType = pick(['FileAccessed','FileModified','FileDownloaded','SharingSet']);
       spA.push(`('${sdEvType}','spo-agent','${uuid()}','SharePoint','${sdEvType}','${sdEvTime}','${sdEvTime}','${siteHost}','${siteId}','${esc(site.url)}','${esc(site.name)}','${esc(dn)}','${esc(du)}','${authEmail}','${esc(authName)}',true,'${siteId}','${driveItemId}')`);
     }
-    }}}}}}
+    }}}}}
     // Count hierarchy entries
     const spoSiteCount=(cfg.spo.tenants||[]).reduce((s,t)=>s+t.sites.length,0);
     const spoLibCount=(cfg.spo.tenants||[]).reduce((s,t)=>s+t.sites.reduce((ss,si)=>ss+si.libraries.length,0),0);
@@ -1191,7 +1532,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
           const evType=pick(['FileAccessed','FileModified','FileDeleted','SharingSet','FileDownloaded']);
           const lib=pick(site.libraries);
           const fn=`doc_${1+Math.floor(Math.random()*50)}.docx`;
-          const authEmail=pick(users.map(u=>`${u.sam}@${cfg.global.domainFqdn}`));
+          const authEmail=pick(users.map(u=>`${u.sam}@${pickEmailDomain(cfg)}`));
           const authName=pick(users.map(u=>`${u.f} ${u.l}`));
           const driveItemId=driveItems.length>0?pick(driveItems):'';
           spA.push(`('SharePointFileOperation','aa-spo','${uuid()}','SharePoint','${evType}','${evTs}','${evTs}','${siteHost}','${siteId}','${esc(site.url)}','${esc(site.name)}','${esc(fn)}','${esc(site.url+"/"+lib+"/"+fn)}','${authEmail}','${authName}',${Math.random()>0.15},'${siteId}','${driveItemId}')`);
@@ -1201,7 +1542,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
       if(richSpoCount>0)onProgress&&onProgress(`  Rich Activity Timeline: +${fmt(richSpoCount)} historical SPO events across ${richDays} days`);
     }
     if(spA.length)R.activity_spo={table:"netwrix_activity_monitor_spo",cols:"activity_type,agent_host,event_id,source,event_type,time_logged,time_reported,site_hostname,site_id,site_url,site_name,item_title,absolute_url,user_login,user_name,success,web_id,drive_item_id",rows:spA};
-    if(spS.length)R.spo_sd={table:"sharepoint_sensitive_data",cols:"scan_id,scan_execution_id,scanned_at,spo_document_id,web_url,file_url,taxonomy_name,term_name,processing_time_seconds,classification_method,scan_status,error_message",rows:spS};
+    if(spS.length)R.spo_sd={table:"sharepoint_sensitive_data",cols:"scan_id,scan_execution_id,scanned_at,spo_document_id,web_url,file_url,matches,matched_pattern_group_name,processing_time_seconds,classification_method,scan_status,error_message",rows:spS};
 
     // V2.6.0: Copilot Activity generation (netwrix_activity_monitor_copilot)
     if(!cfg._schemas||!cfg._schemas.netwrix_activity_monitor_copilot){
@@ -1260,7 +1601,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
         const entityRef=pick(copilotEntityExamples);
         // Generate user IP (random IPv4)
         const userIp=`${10+Math.floor(Math.random()*246)}.${Math.floor(Math.random()*256)}.${Math.floor(Math.random()*256)}.${Math.floor(Math.random()*256)}`;
-        const upn=`${u.sam}@${cfg.global.domainFqdn}`;
+        const upn=`${u.sam}@${pickEmailDomain(cfg)}`;
         cpRows.push(mkCp({
           activity_type:q(evType),
           agent_host:q('copilot-agent-01.acme.local'),
@@ -1290,6 +1631,174 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
       onProgress&&onProgress(`Copilot Activity: ${cpRows.length} events generated`);
     }
 
+    // v3.1.4: AD Activity Monitor generation (netwrix_activity_monitor_ad) — NEW table, confirmed
+    // live against AA26 v1.1.5. Didn't exist in prior versions (AD had no dedicated activity log).
+    if(!cfg._schemas||!cfg._schemas.netwrix_activity_monitor_ad){
+      onProgress&&onProgress("  ⚠ AD Activity: SKIPPED — `netwrix_activity_monitor_ad` schema not discovered");
+    }else{
+      onProgress&&onProgress("  Generating AD activity events...");
+      const adSchema=cfg._schemas.netwrix_activity_monitor_ad;
+      const adCols=adSchema.map(c=>c.name);
+      const adRows=[];
+      const adEsc=v=>String(v).replace(/'/g,"''");
+      const aq=v=>`'${adEsc(String(v??''))}'`;
+      // JSON-typed columns need an explicit valid literal — chDefault's generic '' fallback
+      // isn't valid JSON and would fail the INSERT (same reason Copilot overrides `plugins` below).
+      const AD_JSON_COLS=new Set(['new_attributes','old_attributes','pac','pac_extra_sids','desired_access']);
+      const mkAd=(fields)=>{
+        const vals=adCols.map(col=>{
+          if(fields[col]!==undefined)return fields[col];
+          if(AD_JSON_COLS.has(col))return `'{}'`;
+          return chDefault((adSchema.find(c=>c.name===col)||{}).type||'');
+        });
+        return `(${vals.join(',')})`;
+      };
+      const AD_ACTIVITY_TYPES=['Logon','Logoff','KerberosTGTRequest','KerberosTGSRequest','ObjectModified','ObjectCreated','PasswordChange','AccountLockout','GroupMembershipChange','LDAPQuery'];
+      const LOGON_TYPES=['Interactive','Network','Service','Batch','RemoteInteractive','NetworkCleartext'];
+      const ENC_TYPES=['AES256-CTS-HMAC-SHA1-96','AES128-CTS-HMAC-SHA1-96','RC4-HMAC'];
+      const dcHost=`dc01.${cfg.global.domainFqdn}`;
+      const dcIp=`10.${20+Math.floor(Math.random()*40)}.${Math.floor(Math.random()*256)}.${1+Math.floor(Math.random()*5)}`;
+      const targetAdEvents=Math.min(500,Math.max(150,users.length*2));
+      for(let i=0;i<targetAdEvents;i++){
+        if(!users.length)break;
+        const u=pick(users);
+        const evType=pick(AD_ACTIVITY_TYPES);
+        const r=Math.random();
+        const daysAgo=r<0.6?Math.floor(Math.random()*7):r<0.8?7+Math.floor(Math.random()*23):30+Math.floor(Math.random()*60);
+        const evTime=pickActivityTime(now,daysAgo,cfg.global.activityPattern);
+        if(!evTime)continue; // weekend filtered out per pattern settings
+        const evTs=evTime.toISOString().replace('T',' ').slice(0,23);
+        const isBadEvent=(evType==='AccountLockout')||Math.random()<0.06;
+        const success=!isBadEvent;
+        const clientIp=`10.${50+Math.floor(Math.random()*100)}.${Math.floor(Math.random()*256)}.${Math.floor(Math.random()*256)}`;
+        const clientHost=`WKS-${1000+Math.floor(Math.random()*899)}.${cfg.global.domainFqdn}`;
+        const isKerb=evType==='KerberosTGTRequest'||evType==='KerberosTGSRequest';
+        const isQuery=evType==='LDAPQuery';
+        const fields={
+          activity_type:aq(evType),source:aq('Active Directory'),
+          event_type:aq(evType.replace(/([A-Z])/g,' $1').trim()),
+          time_logged:aq(evTs),agent_host:aq(dcHost),agent_ip:aq(dcIp),agent_domain:aq(cfg.global.domainFqdn),
+          user_name:aq(`${u.f} ${u.l}`),user_sid:aq(u.s),user_dn:aq(u.dn),user_guid:aq(uuid()),
+          success:success?'true':'false',blocked:isBadEvent&&Math.random()<0.5?'true':'false',
+          event_result:success?'0':String(pick([18,24,6,23])),
+          from_object:aq(u.dn),from_host:aq(clientHost),from_ip:aq(clientIp),
+          from_mac:aq(Array.from({length:6},()=>Math.floor(Math.random()*256).toString(16).padStart(2,'0')).join(':')),
+          class_name:aq('user'),protocol:aq(isKerb?'Kerberos':pick(['Kerberos','NTLM','LDAP'])),
+          affected_object:aq(u.dn),affected_object_account_name:aq(u.sam),affected_object_sid:aq(u.s),
+          auth_type:aq(isKerb?'Kerberos':'NTLM'),auth_protocol:aq(isKerb?'Kerberos':'NTLM'),
+          logon_type:aq(pick(LOGON_TYPES)),
+          target_host:aq(evType.startsWith('Kerberos')?dcHost:clientHost),
+          target_host_ip:aq(evType.startsWith('Kerberos')?dcIp:clientIp),
+          encryption_type:aq(pick(ENC_TYPES)),
+          is_user_exist:(success||evType==='AccountLockout')?'true':(Math.random()<0.8?'true':'false'),
+        };
+        if(isKerb){
+          fields.kerb_spn=aq(`HOST/${dcHost}`);
+          fields.tgs_reply_encryption_type=aq(pick(ENC_TYPES));
+          fields.kerb_auth_time=aq(evTs);fields.kerb_start_time=aq(evTs);
+          fields.kerb_end_time=aq(new Date(evTime.getTime()+10*3600*1000).toISOString().replace('T',' ').slice(0,23));
+          fields.kerb_renew_till=aq(new Date(evTime.getTime()+7*24*3600*1000).toISOString().replace('T',' ').slice(0,23));
+          fields.pre_auth_type=aq('ENC-TIMESTAMP');
+        }
+        if(isQuery){
+          fields.query_filter=aq('(&(objectClass=user)(sAMAccountName=*))');
+          fields.query_is_ssl='true';
+          fields.query_objects_returned=String(1+Math.floor(Math.random()*200));
+          fields.query_runtime_min=String(1+Math.floor(Math.random()*5));
+          fields.query_runtime_max=String(10+Math.floor(Math.random()*40));
+          fields.query_runtime_avg=String(5+Math.floor(Math.random()*20));
+          fields.query_security_flag=aq('none');
+        }
+        adRows.push(mkAd(fields));
+      }
+      R.activity_ad={table:'netwrix_activity_monitor_ad',cols:adCols.join(','),rows:adRows};
+      onProgress&&onProgress(`AD Activity: ${adRows.length} events generated`);
+    }
+
+    // v3.1.4: Entra ID Activity Monitor generation (netwrix_activity_monitor_entra) — NEW table,
+    // confirmed live against AA26 v1.1.5. Reuses the same AD users so identities line up across
+    // both activity logs (a user who exists in AD shows up signing into Entra too).
+    if(!cfg._schemas||!cfg._schemas.netwrix_activity_monitor_entra){
+      onProgress&&onProgress("  ⚠ Entra Activity: SKIPPED — `netwrix_activity_monitor_entra` schema not discovered");
+    }else{
+      onProgress&&onProgress("  Generating Entra ID activity events...");
+      const enSchema=cfg._schemas.netwrix_activity_monitor_entra;
+      const enCols=enSchema.map(c=>c.name);
+      const enRows=[];
+      const enEsc=v=>String(v).replace(/'/g,"''");
+      const eq=v=>`'${enEsc(String(v??''))}'`;
+      const EN_JSON_COLS=new Set(['target_resources','additional_details','applied_ca_policies','auth_processing_details','auth_details','risk_event_types']);
+      const mkEn=(fields)=>{
+        const vals=enCols.map(col=>{
+          if(fields[col]!==undefined)return fields[col];
+          if(EN_JSON_COLS.has(col))return `'{}'`;
+          return chDefault((enSchema.find(c=>c.name===col)||{}).type||'');
+        });
+        return `(${vals.join(',')})`;
+      };
+      const EN_ACTIVITY_TYPES=['SignIn','ConditionalAccessEvaluation','RiskDetection','MFAChallenge','TokenIssuance'];
+      const EN_APPS=['Microsoft 365','Azure Portal','Outlook Mobile','Teams','Power BI'];
+      const EN_DEVICE_OS=['Windows 11','Windows 10','iOS 17','Android 14','macOS Sonoma'];
+      const EN_BROWSERS=['Chrome 128','Edge 128','Safari 17','Firefox 130'];
+      const EN_RESOURCES=['Microsoft Graph','Office 365 Exchange Online','Azure Portal','SharePoint Online'];
+      const connHost=`entra-connector-01.${cfg.global.domainFqdn}`;
+      const targetEnEvents=Math.min(500,Math.max(150,users.length*2));
+      for(let i=0;i<targetEnEvents;i++){
+        if(!users.length)break;
+        const u=pick(users);
+        const evType=pick(EN_ACTIVITY_TYPES);
+        const r=Math.random();
+        const daysAgo=r<0.6?Math.floor(Math.random()*7):r<0.8?7+Math.floor(Math.random()*23):30+Math.floor(Math.random()*60);
+        const evTime=pickActivityTime(now,daysAgo,cfg.global.activityPattern);
+        if(!evTime)continue;
+        const evTs=evTime.toISOString().replace('T',' ').slice(0,23);
+        const isRisky=Math.random()<0.08;
+        const success=!isRisky&&Math.random()>0.04;
+        const riskLevel=isRisky?pick(['low','medium','high']):'none';
+        const upn=`${u.sam}@${pickEmailDomain(cfg)}`;
+        const clientIp=`${20+Math.floor(Math.random()*180)}.${Math.floor(Math.random()*256)}.${Math.floor(Math.random()*256)}.${Math.floor(Math.random()*256)}`;
+        const app=pick(EN_APPS);
+        enRows.push(mkEn({
+          activity_type:eq(evType),source:eq('Entra ID'),time_logged:eq(evTs),agent_host:eq(connHost),
+          user_name:eq(`${u.f} ${u.l}`),user_sid:eq(u.s),success:success?'true':'false',
+          id:eq(uuid()),tenant_id:eq(cfg.global.tenantId),tenant_display_name:eq(cfg.global.domainName),
+          correlation_id:eq(uuid()),
+          initiated_by_user_upn:eq(upn),initiated_by_user_id:eq(uuid()),initiated_by_user_ip:eq(clientIp),
+          initiated_by_user_display_name:eq(`${u.f} ${u.l}`),
+          initiated_by_app_display_name:eq(app),initiated_by_app_id:eq(uuid()),
+          initiated_by_app_sp_id:eq(uuid()),initiated_by_app_sp_name:eq(app),
+          initiated_by_app_owner_tenant_id:eq(cfg.global.tenantId),
+          category:eq(pick(['SignInLogs','NonInteractiveUserSignInLogs','AuditLogs'])),
+          result:eq(success?'success':'failure'),
+          result_reason:eq(success?'':pick(['Invalid username or password','Account is locked','MFA required','Blocked by conditional access'])),
+          activity_display_name:eq(evType==='SignIn'?'Sign-in activity':evType.replace(/([A-Z])/g,' $1').trim()),
+          operation_type:eq(evType==='SignIn'?'Sign-in':'Update'),
+          logged_by_service:eq('Core Directory'),
+          status_error_code:success?'0':String(pick([50126,50053,53003,50076])),
+          status_failure_reason:eq(success?'':'See result_reason'),
+          client_app_used:eq(pick(['Browser','Mobile Apps and Desktop clients','Exchange ActiveSync'])),
+          device_id:eq(uuid()),device_display_name:eq(`${u.sam}-PC`),
+          device_os:eq(pick(EN_DEVICE_OS)),device_browser:eq(pick(EN_BROWSERS)),
+          device_is_compliant:Math.random()<0.7?'true':'false',device_is_managed:Math.random()<0.8?'true':'false',
+          device_trust_type:eq(pick(['AzureAD','Hybrid Azure AD joined','Not Registered'])),
+          location_city:eq(u.city||''),location_state:eq(u.state||''),location_country:eq(u.country||''),
+          conditional_access_status:eq(success?'success':pick(['failure','notApplied'])),
+          is_interactive:'true',sign_in_type:eq('interactiveUser'),
+          client_credential_type:eq('none'),incoming_token_type:eq('none'),
+          auth_protocol:eq(pick(['oAuth2','saml'])),
+          auth_requirement:eq(Math.random()<0.6?'multiFactorAuthentication':'singleFactorAuthentication'),
+          flagged_for_review:isRisky&&Math.random()<0.3?'true':'false',
+          user_agent:eq(`Mozilla/5.0 (${pick(EN_DEVICE_OS)}) ${pick(EN_BROWSERS)}`),
+          risk_detail:eq(isRisky?pick(['unfamiliarFeatures','maliciousIPAddress','anonymizedIPAddress']):'none'),
+          risk_level_aggregated:eq(riskLevel),risk_level_during_sign_in:eq(riskLevel),
+          risk_state:eq(isRisky?pick(['atRisk','confirmedCompromised']):'none'),
+          resource_display_name:eq(pick(EN_RESOURCES)),resource_id:eq(uuid()),
+        }));
+      }
+      R.activity_entra={table:'netwrix_activity_monitor_entra',cols:enCols.join(','),rows:enRows};
+      onProgress&&onProgress(`Entra Activity: ${enRows.length} events generated`);
+    }
+
     // Shared Links generation (schema-discovery-driven — for "Shared Links" and "Shared Links Activity" reports)
     if(cfg._schemas&&cfg._schemas.sharepoint_online_shared_links){
       onProgress&&onProgress("  Generating SharePoint shared links...");
@@ -1309,7 +1818,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
           const isExternalLink = (linkScope==='ANONYMOUS') || Math.random() < 0.30;
           const extDomains=['gmail.com','outlook.com','partner-corp.com','vendor-inc.com','consultant.io','external-audit.com','contractor.net'];
           const creator=users.length?pick(users):null;
-          const creatorEmail=creator?`${creator.f.toLowerCase()}.${creator.l.toLowerCase()}@${cfg.global.domainFqdn}`:'user@acme.local';
+          const creatorEmail=creator?`${normalizeNamePart(creator.f)}.${normalizeNamePart(creator.l)}@${pickEmailDomain(cfg)}`:'user@acme.local';
           const creatorName=creator?`${creator.f} ${creator.l}`:'User';
           // For shared_with fields if schema supports them
           const sharedWithEmail = isExternalLink ? `recipient_${Math.floor(Math.random()*500)}@${pick(extDomains)}` : creatorEmail;
@@ -1750,8 +2259,8 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
           // V2.6.13: ~10% of users are Guest (external) — needed for External Users/Domains reports
           const isGuestUser=Math.random()<0.1;
           const EXTERNAL_DOMAINS=['partner-consulting.com','vendorsupply.org','contractor-services.net','audit-firm.com','legal-advisors.co'];
-          const userEmail=isGuestUser?`${u.sam}@${pick(EXTERNAL_DOMAINS)}`:`${u.sam}@${cfg.global.domainFqdn}`;
-          userPrincipals.push({id:pid,sid:u.s,sam:u.sam,name:`${u.f} ${u.l}`,upn:`${u.sam}@${cfg.global.domainFqdn}`,isAdmin:u.adm,isGuest:isGuestUser});
+          const userEmail=isGuestUser?`${u.sam}@${pick(EXTERNAL_DOMAINS)}`:`${u.sam}@${pickEmailDomain(cfg)}`;
+          userPrincipals.push({id:pid,sid:u.s,sam:u.sam,name:`${u.f} ${u.l}`,upn:`${u.sam}@${pickEmailDomain(cfg)}`,isAdmin:u.adm,isGuest:isGuestUser});
           pRows.push(mkPrincipal({
             entityId:uq(pid), sourceTypeId:uq(V2.stAdUser), name:q(`${u.f} ${u.l}`), displayName:q(`${u.f} ${u.l}`),
             tenancyReference:uq(V2.tenancy), connectorReference:uq(V2.connCIFS), sourceReference:uq(V2.tenancy),
@@ -2284,18 +2793,12 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
       };
       const ACTIONS=['upgrade','keep','downgrade','none'];
       const LABELS=['Confidential','Internal','Public','Highly Confidential','Restricted'];
-      const TAXONOMIES=[
-        {name:'GDPR',terms:['Email Address','National ID','Phone Number','IP Address']},
-        {name:'PCI DSS',terms:['Credit Card Number','CVV','Bank Account']},
-        {name:'PHI',terms:['Medical Record','Patient ID','Diagnosis Code']},
-        {name:'Financial',terms:['Revenue Recognition','Audit Trail Record','1099 Form']},
-      ];
       // ~25% of SPO docs + CIFS files get sensitive data matches
       const sensitiveCandidates=[...spoDocs,...cifsFiles];
       for(const ent of sensitiveCandidates){
         if(Math.random()<0.25){
-          const tx=pick(TAXONOMIES);
-          const matches=`[(${'\''+tx.name+'\''},${'\''+pick(tx.terms)+'\''})]`;
+          const m=pickSdMatch(cfg);
+          const matches=`[('${esc(m.groupName)}','${esc(m.patternName)}')]`;
           const hasLabel=Math.random()<0.6;
           const labelName=hasLabel?pick(LABELS):'';
           sdRows.push(mkSD({
@@ -2310,7 +2813,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
             action:hasLabel?"'"+pick(ACTIONS)+"'":"'none'",
             labelId:hasLabel?uq(uuid()):'NULL',
             labelName:hasLabel?q(labelName):'NULL',
-            reason:hasLabel?q('Matched '+tx.name+' policy'):'NULL',
+            reason:hasLabel?q('Matched '+m.groupName+' policy'):'NULL',
             decisionTimestamp:q(ts6),
             appliedAt:hasLabel?q(ts6):'NULL',
             applyError:q(''),
@@ -2404,8 +2907,8 @@ async function mbInject(cfg, sql) {
   const sid = cfg.connection._mbSession;
   if (!sid) throw new Error("No Metabase session. Connect first.");
   const resp = await fetch(cfg.connection.url + '/metabase/api/dataset', {
-    method:'POST', headers:{'Content-Type':'application/json','X-Metabase-Session':sid},
-    body:JSON.stringify({database:2, type:'native', native:{query:sql}})
+    method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+    body:JSON.stringify({database:cfg.connection.databaseId||2, type:'native', native:{query:sql}})
   });
   const d = await resp.json();
   if (d.status==='failed' && d.error && d.error.indexOf('ResultSet')>=0) return {ok:true};
@@ -2419,8 +2922,8 @@ async function mbDiscoverSchema(cfg, tableName) {
   if (!sid) throw new Error("No Metabase session");
   const sql = `SELECT name, type, default_kind FROM system.columns WHERE table='${tableName}' AND database='access_analyzer' ORDER BY position`;
   const resp = await fetch(cfg.connection.url + '/metabase/api/dataset', {
-    method:'POST', headers:{'Content-Type':'application/json','X-Metabase-Session':sid},
-    body:JSON.stringify({database:2, type:'native', native:{query:sql}})
+    method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+    body:JSON.stringify({database:cfg.connection.databaseId||2, type:'native', native:{query:sql}})
   });
   const d = await resp.json();
   if (d.status==='failed') throw new Error(d.error||'Query failed');
@@ -2432,7 +2935,7 @@ async function mbDiscoverSchema(cfg, tableName) {
 }
 
 async function mbDiscoverAllSchemas(cfg) {
-  const tables = ['active_directory_risk_catalog','entities','principals','permissions','memberships','system_objects','permission_sets','permission_grant_rules','ownerships','sensitive_data','netwrix_activity_monitor_copilot','sharepoint_online_shared_links','crawl_completions'];
+  const tables = ['active_directory_risk_catalog','entities','principals','permissions','memberships','system_objects','permission_sets','permission_grant_rules','ownerships','sensitive_data','netwrix_activity_monitor_copilot','netwrix_activity_monitor_ad','netwrix_activity_monitor_entra','sharepoint_online_shared_links','crawl_completions'];
   const schemas = {};
   for (const t of tables) {
     try {
@@ -2450,8 +2953,8 @@ async function mbDiscoverEverything(cfg, onProgress) {
   if (!sid) throw new Error("No Metabase session");
   const runSql = async (sql) => {
     const resp = await fetch(cfg.connection.url + '/metabase/api/dataset', {
-      method:'POST', headers:{'Content-Type':'application/json','X-Metabase-Session':sid},
-      body:JSON.stringify({database:2, type:'native', native:{query:sql}})
+      method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+      body:JSON.stringify({database:cfg.connection.databaseId||2, type:'native', native:{query:sql}})
     });
     const d = await resp.json();
     if (d.status==='failed') throw new Error(d.error||'Query failed');
@@ -2495,7 +2998,16 @@ async function mbDiscoverEverything(cfg, onProgress) {
     'domain_type_properties','path_metadata','permission_calc_rules','source_type_registry','source_settings',
     // Optional features we don't currently demo but don't block any reports
     'active_directory_user_custom_attribute','netwrix_activity_monitor_leef',
+    // v3.1.4: generators added this pass — confirmed real gaps, not false positives like the three below
+    'netwrix_activity_monitor_ad','netwrix_activity_monitor_entra',
+    // v3.1.3: confirmed live against AA26 v1.1.5 — companion base table to cifs_latest_scan_execution_mv,
+    // auto-populated from cifs_object/cifs_permission inserts, same as every other _latest/_mv pair
+    'cifs_latest_scan_execution',
+    // v3.1.3: "_pre_v2" tables are superseded by sharepoint_sensitive_data post-migration (this env has
+    // applied 32 schema migrations per its schema_versions table) — legacy, not a population target
+    'sharepoint_sensitive_data_mip_labels_pre_v2','sharepoint_sensitive_data_pre_v2',
   ]);
+
 
   // Build the final report — filter out tables that are derivatives/internals, not base tables
   const allTableNames = tableRows.map(r => r[0]);
@@ -2541,8 +3053,59 @@ async function mbDiscoverEverything(cfg, onProgress) {
 // === AA26 REST API helpers (v2.8.0-alpha) ===
 // AA26 uses cookie-only OIDC auth. Users paste their _dspm_session from browser DevTools.
 // Investigation findings captured 2026-05-21: no token/PAT/API-key mechanism exists.
-const AA26_SOURCE_TYPES = {
-  // UUIDs from SecurWrix LAB — environment-specific, but reused as defaults
+// v3.3.1: schema-compatibility checker — the 13 tables the generator writes to with a fixed,
+// hardcoded column list (schema-discovery-driven tables like entities/principals/Copilot/AD/
+// Entra activity auto-adapt already and don't need this). Keep this in sync with the actual
+// `cols:` string on each R.xxx={table:...,cols:...} assignment in generateDemoDataAsync if
+// those ever change — this is a separate literal, not derived from them, by design (avoids a
+// larger refactor of every INSERT site for a check that only needs to run occasionally).
+const EXPECTED_SCHEMA_CHECK = {
+  active_directory_effective_group_membership: "group_object_guid,member_object_guid,nesting_level",
+  active_directory_group: "scan_id,scan_execution_id,scanned_at,object_guid,object_sid,distinguished_name,sam_account_name,name,group_scope,group_type,admin_count,primary_group_id,domain_name,domain_canonical_name,cn,mail,is_deleted,hard_delete",
+  active_directory_group_membership: "scan_id,scan_execution_id,scanned_at,group_dn,member_dn,foreign_sid,hard_delete",
+  active_directory_user: "scan_id,scan_execution_id,scanned_at,object_guid,object_sid,distinguished_name,sam_account_name,user_principal_name,display_name,given_name,surname,enabled,when_created,when_changed,description,admin_count,primary_group_id,domain_name,domain_canonical_name,cn,mail,telephone_number,mobile,office,street_address,city,state,postal_code,country,job_title,department,company,manager_dn,employee_id,user_account_control,password_last_set,password_never_expires,last_logon,last_logon_timestamp,bad_pwd_count,is_deleted,hard_delete",
+  cifs_object: "scan_id,scan_execution_id,scanned_at,host,share_name,share_path,path,object_type,parent_path,name,file_extension,file_size,owner_sid,group_owner_sid,created_time,modified_time,accessed_time,scan_status,error_message,inheritance_flags,is_protected,is_world_readable,is_world_writable,is_admin_only,has_explicit_deny,permission_count,unique_trustees_count,permission_flags,is_complete,hard_delete",
+  cifs_permission: "scan_id,scan_execution_id,scanned_at,trustee_sid,host,share_name,path,permissions,normalized_permissions,access_type,access_mask,inheritance_flags,is_inherited,mip_label_id,mip_label_name,hard_delete",
+  cifs_sensitive_data: "scan_id,scan_execution_id,scanned_at,host,share_name,path,matches,pattern_matches,matched_taxonomy_name,matched_pattern_group_name,processing_time_seconds,classification_method,hard_delete,scan_status,error_message",
+  cifs_share_permission: "scan_id,scan_execution_id,scanned_at,trustee_sid,host,share_name,permissions,normalized_permissions,access_type,access_mask,mip_label_id,mip_label_name,hard_delete",
+  netwrix_activity_monitor_json: "activity_type,agent_host,event_type,path,success,time_logged,time_reported,object_type,protocol,protocol_version,server,server_ip,share_name,unc_path,volume_id,stream_name,size,bytes_read,bytes_written,number_of_reads,user_ip,user_sid,user_group,user_group_id,user_guid,user_host,user_name,blocked,is_copy,old_attribute,new_attribute,new_path,unc_new_path,new_security_desc,old_security_desc,security_desc_diff,process_id,process_name",
+  netwrix_activity_monitor_spo: "activity_type,agent_host,event_id,source,event_type,time_logged,time_reported,site_hostname,site_id,site_url,site_name,item_title,absolute_url,user_login,user_name,success,web_id,drive_item_id",
+  sharepoint_online_objects: "scan_id,scan_execution_id,scanned_at,site_hostname,site_id,item_id,site_url,drive_id,drive_item_id,item_type,name,file_extension,relative_url,file_size,created_time,created_by_id,created_by_email,modified_time,modified_by_id,modified_by_email,parent_item_id,scan_status,error_message,is_complete",
+  sharepoint_online_permissions: "scan_id,scan_execution_id,scanned_at,site_hostname,site_id,item_id,permission_id,share_id,principal_id,principal_type,principal_name,principal_email,permission_type,permission_levels,effective_base_permissions,normalized_permissions",
+  sharepoint_sensitive_data: "scan_id,scan_execution_id,scanned_at,spo_document_id,web_url,file_url,matches,matched_pattern_group_name,processing_time_seconds,classification_method,scan_status,error_message",
+};
+
+// Queries live system.columns for the tables above and reports, per table, which columns this
+// app expects to write to that are MISSING on the connected instance (the failure mode that
+// actually breaks an INSERT — new/extra live columns are harmless and not flagged). This is a
+// detection tool, not an auto-fixer: it tells you exactly what's missing so you (or a Claude
+// session) can go fix the specific generator line — it doesn't rewrite code itself.
+async function runSchemaCompatibilityCheck(cfg) {
+  const tables = Object.keys(EXPECTED_SCHEMA_CHECK);
+  const inList = tables.map(t=>`'${t}'`).join(',');
+  const r = await fetch(cfg.connection.url+'/metabase/api/dataset', {
+    method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
+    body: JSON.stringify({database:cfg.connection.databaseId||2, type:'native', native:{query:`SELECT table, name FROM system.columns WHERE database='access_analyzer' AND table IN (${inList})`}})
+  });
+  const j = await r.json();
+  if (!j.data || !j.data.rows) throw new Error('Schema query failed — could not read system.columns');
+  const liveCols = {};
+  for (const [t, n] of j.data.rows) { (liveCols[t] = liveCols[t]||[]).push(n); }
+  return tables.map(t => {
+    const exp = EXPECTED_SCHEMA_CHECK[t].split(',');
+    const live = new Set(liveCols[t]||[]);
+    const missing = exp.filter(c=>!live.has(c));
+    const extra = (liveCols[t]||[]).filter(c=>!exp.includes(c));
+    const tableExists = !!liveCols[t];
+    return { table: t, tableExists, missing, extra, ok: tableExists && missing.length===0 };
+  });
+}
+
+const AA26_SOURCE_TYPES_FALLBACK = {
+
+  // v3.2.2: these UUIDs are from the OLD lab and are NOT valid in a fresh/different AA26
+  // environment — sending a mismatched sourceTypeId caused every source create to 500.
+  // Kept only as a last-resort if live discovery (aa26DiscoverSourceTypes) fails entirely.
   "active-directory":      "0ea3dea8-ed5f-45f7-8ca2-5ce8a1d34c17",
   "cifs":                  "3fdcfc88-3ca2-4f64-adf5-43b7e5a4a950",
   "entra-id":              "368333e7-dd4a-4078-ae8c-b6a1d08ef216",
@@ -2552,12 +3115,27 @@ const AA26_SOURCE_TYPES = {
   "localgroups":           "a2f164b5-23c6-4d11-b329-e2f7c9e07974", // hidden from /source-types listing
 };
 
+// v3.2.2: discover the REAL source-type UUIDs for whatever AA26 instance we're connected to —
+// these are environment-specific and change between installs/versions (confirmed: this AA26
+// version dropped plain "entra-id"/"sharepoint" in favor of *-ccf variants, and added a new
+// "file-server-discover" type). "localgroups" stays hidden from this listing in every version
+// seen so far, so it's intentionally left out of the returned map — callers should treat a
+// missing key as "not creatable via API in this environment", not retry with a guessed UUID.
+async function aa26DiscoverSourceTypes(cfg) {
+  const r = await aa26Fetch(cfg, "/api/v1/source-types");
+  if (!r.ok) throw new Error(`source-types discovery failed: HTTP ${r.status}`);
+  const list = r.body?.data || (Array.isArray(r.body) ? r.body : []);
+  const map = {};
+  for (const st of list) if (st?.name && st?.id) map[st.name] = st.id;
+  return map;
+}
+
 async function aa26Fetch(cfg, path, opts={}) {
   const host = cfg.connection?.aa26Host || cfg.connection.host;
   const cookie = cfg.connection?.aa26SessionCookie || "";
   // V2.8.0-alpha refinement: same-origin auto-mode — browser auto-attaches cookies
   const isSameOrigin = typeof window !== "undefined" && window.location.hostname === host;
-  if (!cookie && !isSameOrigin) throw new Error("AA26 session cookie not set (or host this app on the AA26 origin for auto-auth)");
+  if (!cookie && !isSameOrigin) throw new Error("AA session cookie not set (or host this app on the AA origin for auto-auth)");
   const url = isSameOrigin ? path : `https://${host}${path}`;
   const headers = { "Content-Type":"application/json", ...(opts.headers||{}) };
   // Only set Cookie header in cross-origin mode (browser blocks setting it manually otherwise)
@@ -2571,6 +3149,51 @@ async function aa26Fetch(cfg, path, opts={}) {
   const txt = await r.text();
   let body=null; try{ body=JSON.parse(txt); }catch{ body=txt; }
   return { status: r.status, ok: r.ok, body };
+}
+
+// v3.2.0: AA26's GraphQL endpoint (separate from the REST /api/v1/* surface, same-origin
+// _dspm_session cookie auth). Used to discover the real Sensitive Data Pattern Groups/Patterns
+// catalog — confirmed live via Apollo cache inspection (introspection is disabled server-side).
+async function aa26GraphQL(cfg, query, variables) {
+  const host = cfg.connection?.aa26Host || cfg.connection.host;
+  const isSameOrigin = typeof window !== "undefined" && window.location.hostname === host;
+  const url = isSameOrigin ? "/graphql" : `https://${host}/graphql`;
+  const r = await fetch(url, {
+    method: "POST", credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables }),
+  });
+  const j = await r.json();
+  if (j.errors) throw new Error(j.errors.map(e=>e.message).join("; "));
+  return j.data;
+}
+
+// v3.2.0: Discover the real Sensitive Data Pattern Groups + Patterns from this AA26 instance.
+// Confirmed live against AA26 v1.1.5: 11 built-in groups (CCPA, CMMC, Credentials, Financial
+// Records, GDPR, GDPR Restricted, GLBA, HIPAA, PCI DSS, PHI, PII), 139 built-in patterns, each
+// with a real regex and confidence level. Users can also add custom groups/patterns in AA26
+// itself — this discovery call picks those up too, no code change needed on our end.
+async function aa26DiscoverSensitiveDataCatalog(cfg) {
+  const groupsQ = `query($page:Int,$pageSize:Int){ sensitiveDataPatternGroups(page:$page,pageSize:$pageSize){ data{ id name } } }`;
+  const patQ = `query($page:Int,$pageSize:Int){ sensitiveDataPatterns(page:$page,pageSize:$pageSize){ data{ id name confidence groups{ id name } } } }`;
+  const gData = await aa26GraphQL(cfg, groupsQ, {page:1, pageSize:200});
+  const groups = gData.sensitiveDataPatternGroups.data;
+  let patterns = [];
+  for (let page=1; page<=10; page++) {
+    const pData = await aa26GraphQL(cfg, patQ, {page, pageSize:100});
+    const batch = pData.sensitiveDataPatterns.data;
+    patterns = patterns.concat(batch);
+    if (batch.length < 100) break; // last page
+  }
+  // Flatten to { groupName: [{name, confidence}] } for easy consumption by the generator
+  const byGroup = {};
+  for (const g of groups) byGroup[g.name] = [];
+  for (const p of patterns) {
+    for (const g of (p.groups||[])) {
+      if (byGroup[g.name]) byGroup[g.name].push({ name: p.name, confidence: p.confidence });
+    }
+  }
+  return { groups: groups.map(g=>g.name), byGroup, patternCount: patterns.length };
 }
 
 async function aa26VerifySession(cfg) {
@@ -2613,8 +3236,13 @@ async function aa26GetScans(cfg) {
 // V2.8.0: Simulate a completed scan execution for the given scan_id.
 // API gotcha: timestamps and object counts are server-controlled and ignored on input.
 // The state machine requires pending -> running -> completed transitions in sequence.
+// v3.1.2: field renamed scan_id -> scanId by inference (matches the confirmed camelCase
+// rewrite of /api/v1/scans), NOT independently confirmed live — the rest of the Scan
+// creation flow was verified against the real API this pass, but no scan was actually
+// run to completion, so this endpoint's exact shape is still unverified. Test this
+// specific call against a real scan before trusting it end-to-end.
 async function aa26SimulateExecution(cfg, scanId, scanType) {
-  const create = await aa26Fetch(cfg, "/api/v1/scan-executions", { method:"POST", body: { scan_id: scanId } });
+  const create = await aa26Fetch(cfg, "/api/v1/scan-executions", { method:"POST", body: { scanId: scanId } });
   if (!create.ok) return { ok:false, error:`create failed: ${create.status} ${JSON.stringify(create.body).slice(0,120)}` };
   const execId = create.body.id;
   const toRunning = await aa26Fetch(cfg, `/api/v1/scan-executions/${execId}`, { method:"PATCH", body: { status: "running" } });
@@ -2625,7 +3253,7 @@ async function aa26SimulateExecution(cfg, scanId, scanType) {
 }
 
 async function aa26GetScanExecutions(cfg, scanId) {
-  const path = scanId ? `/api/v1/scan-executions?scan_id=${scanId}&per_page=100` : `/api/v1/scan-executions?per_page=100`;
+  const path = scanId ? `/api/v1/scan-executions?scanId=${scanId}&per_page=100` : `/api/v1/scan-executions?per_page=100`;
   const r = await aa26Fetch(cfg, path);
   return r.ok ? (r.body.data || []) : [];
 }
@@ -2639,7 +3267,7 @@ async function aa26DeleteServiceAccount(cfg, id) { return await aa26Fetch(cfg, `
 
 // ── AA26 Config: Generate post-setup SQL command for Postgres fixup
 // Dynamically builds kubectl one-liner using real UUIDs from the orchestrator run.
-function aa26GeneratePostSetupSQL(sourceNames, executions, cfg) {
+function aa26GeneratePostSetupSQL(sourceNames, executions, cfg, mipLabelData) {
   // Part 1: Create source groups and link sources
   const sgSQL = sourceNames.map(name =>
     `INSERT INTO source_groups (id,name,description,max_concurrent_scans,status,service_account_id,source_type_id,created_at,updated_at) ` +
@@ -2647,6 +3275,91 @@ function aa26GeneratePostSetupSQL(sourceNames, executions, cfg) {
     `FROM sources s WHERE s.name='${name}' AND NOT EXISTS (SELECT 1 FROM source_groups sg WHERE sg.name='${name}');\n` +
     `UPDATE sources SET source_group_id=sg.id FROM source_groups sg WHERE sources.name='${name}' AND sg.name='${name}' AND sources.source_group_id IS NULL;`
   ).join("\n");
+
+  // Part 1b: v3.0.3 — MIP Labels (synthetic insertion for demo purposes)
+  // Real AA26 pulls these from a connected Entra tenant via Microsoft Graph.
+  // For the demo we INSERT them directly with deterministic UUIDs so the REST PUT
+  // (done in Phase 6 of the orchestrator) can reference them.
+  //
+  // CRITICAL: The MIP SQL is wrapped in its own SAVEPOINT inside the main transaction
+  // so that ANY failure here (unknown column, FK violation, constraint, etc.) only
+  // rolls back the MIP insert — NOT the source group inserts or scan execution UPDATEs.
+  // Without this savepoint, a MIP error would cause executions to keep their API-default
+  // 0 object counts (bug observed in v3.0.2).
+  let mipSQL = "";
+  if (mipLabelData && Array.isArray(mipLabelData.sources) && mipLabelData.sources.length > 0) {
+    const tenantBlocks = mipLabelData.sources.map((src, idx) => {
+      const safeName = src.sourceName.replace(/'/g,"''");
+      const tag = `mip${idx}`;
+      const labelInserts = src.labels.map(lab => `    INSERT INTO mip_labels (id, source_id, label_id, name, priority, metadata, last_synced_at, created_at, updated_at)
+    VALUES (
+      '${lab.uuid}'::uuid,
+      '${src.sourceId}'::uuid,
+      '${lab.id}',
+      '${lab.name.replace(/'/g,"''")}',
+      ${lab.priority||0},
+      '${JSON.stringify({description: lab.description||"", color: lab.color||"#888888"}).replace(/'/g,"''")}'::jsonb,
+      NOW(),
+      NOW(), NOW()
+    )
+    ON CONFLICT (source_id, label_id) DO UPDATE SET
+      id = EXCLUDED.id,
+      name = EXCLUDED.name,
+      priority = EXCLUDED.priority,
+      metadata = EXCLUDED.metadata,
+      last_synced_at = NOW(),
+      updated_at = NOW();`).join("\n");
+
+      return `-- ─── Tenant ${idx+1}/${mipLabelData.sources.length}: ${safeName} (${src.sourceId}) ───
+DO $${tag}$
+DECLARE
+  v_col RECORD;
+  v_count INT;
+BEGIN
+  -- Clean up any orphans from prior runs for this tenant
+  BEGIN
+    DELETE FROM mip_labels WHERE source_id = '${src.sourceId}'::uuid;
+    RAISE NOTICE '[${safeName}] Deleted orphan MIP labels';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE '[${safeName}] Orphan cleanup failed (continuing): %', SQLERRM;
+  END;
+
+  -- Insert/upsert this tenant's labels
+  BEGIN
+${labelInserts}
+    RAISE NOTICE '[${safeName}] inserted/upserted ${src.labels.length} labels';
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE '[${safeName}] ⚠ INSERT failed: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
+    -- Dump schema once if something went wrong
+    RAISE NOTICE '--- mip_labels schema (debug) ---';
+    FOR v_col IN
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns
+      WHERE table_name = 'mip_labels'
+      ORDER BY ordinal_position
+    LOOP
+      RAISE NOTICE 'COL: % | type: % | nullable: % | default: %',
+        v_col.column_name, v_col.data_type, v_col.is_nullable, COALESCE(v_col.column_default::text, 'NULL');
+    END LOOP;
+  END;
+
+  -- Verify
+  BEGIN
+    SELECT COUNT(*) INTO v_count FROM mip_labels WHERE source_id = '${src.sourceId}'::uuid;
+    RAISE NOTICE '[${safeName}] verification: % labels present', v_count;
+    FOR v_col IN SELECT id::text AS id_text, label_id, name FROM mip_labels WHERE source_id = '${src.sourceId}'::uuid LOOP
+      RAISE NOTICE '[${safeName}] ROW: % | label_id=% | name=%', v_col.id_text, v_col.label_id, v_col.name;
+    END LOOP;
+  EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE '[${safeName}] Verification SELECT failed: %', SQLERRM;
+  END;
+EXCEPTION WHEN OTHERS THEN
+  RAISE NOTICE '[${safeName}] DO block outer exception: % (SQLSTATE: %)', SQLERRM, SQLSTATE;
+END $${tag}$;`;
+    }).join("\n\n");
+
+    mipSQL = `-- v3.0.7: MIP Labels for ${mipLabelData.sources.length} Entra tenant(s) — each in own DO block for failure isolation\n${tenantBlocks}`;
+  }
 
   // Part 2: Backdate the API-created execution to be "the latest" AND generate
   // N historical clones spread back over the configured history window.
@@ -2702,9 +3415,24 @@ function aa26GeneratePostSetupSQL(sourceNames, executions, cfg) {
   const totalNewRows = executions.length * histCount;
   const execSQL = `-- Backdating ${executions.length} latest executions + cloning ${totalNewRows} historical executions\n` + sqlLines.join("\n");
 
-  const sql = `BEGIN;\n${sgSQL}\n${execSQL}\nCOMMIT;`;
+  // v3.0.3: MIP SQL runs in its OWN transaction AFTER the main one commits.
+  // This guarantees that any failure (unknown column, FK violation, anything) cannot
+  // roll back the source group inserts or scan execution UPDATEs (the 0-objects bug from v3.0.2).
+  const mainTxn = `BEGIN;\n${sgSQL}\n${execSQL}\nCOMMIT;`;
+  const mipTxn = mipSQL ? `\n-- MIP Labels in a separate transaction so failure here cannot affect the main work above\nBEGIN;\n${mipSQL}\nCOMMIT;` : "";
+  const sql = mainTxn + mipTxn;
   const cmd = `kubectl exec -i postgres-0 -n access-analyzer -- psql -U postgres -d access_analyzer << 'EOSQL'\n${sql}\nEOSQL`;
-  return { sql, cmd, summary: { latestUpdated: executions.length, historicalAdded: totalNewRows, historyDays, scanFreq } };
+  return {
+    sql, cmd,
+    summary: {
+      latestUpdated: executions.length,
+      historicalAdded: totalNewRows,
+      historyDays,
+      scanFreq,
+      mipLabelsInserted: mipLabelData?.sources?.reduce((sum, s) => sum + s.labels.length, 0) || 0,
+      mipTenants: mipLabelData?.sources?.length || 0
+    }
+  };
 }
 
 // ── AA26 Config: Wipe configuration (reverse dependency order)
@@ -2714,14 +3442,54 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   const plan = aa26ConfigPlan(cfg);
   const demoSourceNames = new Set(plan.sources.map(s => s.name));
   const demoScanNames = new Set(plan.scans.map(s => s.name));
-  const stats = { execDel:0, scanDel:0, srcDel:0, sgDel:0, errors:0 };
+  // v3.1.0: tracked IDs from prior inject runs (persisted in cfg.history) — most reliable identification,
+  // survives region/vertical/hostname changes. Falls back to dynamic + hardcoded patterns if state is lost.
+  const trackedSourceIds = new Set(cfg.history?.injectedAA26?.sourceIds || []);
+  const trackedScanIds = new Set(cfg.history?.injectedAA26?.scanIds || []);
+  const trackedSaIds = new Set(cfg.history?.injectedAA26?.serviceAccountIds || []);
+
+  // Dynamic patterns derived from CURRENT cfg — catches user-customized FS hostnames
+  const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const fsShorts = [...new Set((cfg.fs?.hosts||[]).map(h => (h.hostname||'').split('.')[0]).filter(Boolean))];
+  const dynamicFsSourcePatterns = fsShorts.map(h => new RegExp(`^Windows FS - ${escapeRe(h)}(\\..+)?$`));
+  const dynamicFsScanPatterns = fsShorts.flatMap(h => [
+    new RegExp(`^Windows FS - ${escapeRe(h)}(\\..+)? - Sync$`),
+    new RegExp(`^Windows FS - ${escapeRe(h)}(\\..+)? - Access Scan$`),
+    new RegExp(`^Windows FS - ${escapeRe(h)}(\\..+)? - Sensitive Data Scan$`),
+  ]);
+
+  // Hardcoded fallback patterns — catches legacy defaults + standard naming conventions
+  // across all regions/verticals
+  const DEMO_SOURCE_PATTERNS = [
+    /^CloudLab AD - dc01$/,
+    /^Windows FS - fs01(\..+)?$/,
+    /^Windows FS — Local Users & Groups$/,
+    /^.+ Entra ID$/,                                 // matches any domain prefix
+    /^.+ SPO$/,                                      // matches any domain prefix
+    ...dynamicFsSourcePatterns,
+  ];
+  const DEMO_SCAN_PATTERNS = [
+    /^CloudLab AD - dc01 - Identity Sync$/,
+    /^.+ Entra ID - Sync$/,
+    /^Windows FS - fs01(\..+)? - Sync$/,
+    /^Windows FS — Local Users & Groups - Sync$/,
+    /^Windows FS - fs01(\..+)? - Access Scan$/,
+    /^Windows FS - fs01(\..+)? - Sensitive Data Scan$/,
+    /^.+ SPO - Access Scan$/,
+    /^.+ SPO - Sensitive Data Scan$/,
+    ...dynamicFsScanPatterns,
+  ];
+  // Three-layer predicate: tracked ID (precise) > exact name (current cfg) > pattern (legacy + customized)
+  const isDemoSource = (s) => trackedSourceIds.has(s.id) || demoSourceNames.has(s.name) || DEMO_SOURCE_PATTERNS.some(p => p.test(s.name));
+  const isDemoScan = (s) => trackedScanIds.has(s.id) || demoScanNames.has(s.name) || DEMO_SCAN_PATTERNS.some(p => p.test(s.name));
+  const stats = { execDel:0, scanDel:0, srcDel:0, sgDel:0, errors:0, trackedSrcUsed:0, trackedScanUsed:0 };
   const isAll = mode === "all";
-  log(isAll ? "Mode: FULL — wiping ALL configuration content" : "Mode: DEMO — wiping demo-created items only");
+  log(isAll ? "Mode: FULL — wiping ALL configuration content" : `Mode: DEMO — identifying via ${trackedSourceIds.size} tracked source IDs + name patterns (region/hostname-resilient)`);
 
   // Phase 1: Delete scan executions
   log("→ Wiping scan executions...");
   const allScans = await aa26GetScans(cfg);
-  const targetScans = isAll ? allScans : allScans.filter(s => demoScanNames.has(s.name));
+  const targetScans = isAll ? allScans : allScans.filter(s => { const m = isDemoScan(s); if (m && trackedScanIds.has(s.id)) stats.trackedScanUsed++; return m; });
   for (const scan of targetScans) {
     const execs = await aa26GetScanExecutions(cfg, scan.id);
     for (const ex of execs) {
@@ -2735,17 +3503,17 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   log("→ Wiping scans...");
   for (const scan of targetScans) {
     const r = await aa26DeleteScan(cfg, scan.id);
-    if (r.ok || r.status === 204) { log(`  ✓ Deleted scan "${scan.name}"`); stats.scanDel++; }
+    if (r.ok || r.status === 204) { log(`  ✓ Deleted scan "${scan.name}"${trackedScanIds.has(scan.id)?' [tracked]':''}`); stats.scanDel++; }
     else { log(`  ✗ Failed to delete scan "${scan.name}": HTTP ${r.status}`); stats.errors++; }
   }
 
   // Phase 3: Delete sources
   log("→ Wiping sources...");
   const allSources = await aa26GetSources(cfg);
-  const targetSources = isAll ? allSources : allSources.filter(s => demoSourceNames.has(s.name));
+  const targetSources = isAll ? allSources : allSources.filter(s => { const m = isDemoSource(s); if (m && trackedSourceIds.has(s.id)) stats.trackedSrcUsed++; return m; });
   for (const src of targetSources) {
     const r = await aa26DeleteSource(cfg, src.id);
-    if (r.ok || r.status === 204) { log(`  ✓ Deleted source "${src.name}"`); stats.srcDel++; }
+    if (r.ok || r.status === 204) { log(`  ✓ Deleted source "${src.name}"${trackedSourceIds.has(src.id)?' [tracked]':''}`); stats.srcDel++; }
     else { log(`  ✗ Failed to delete source "${src.name}": HTTP ${r.status}`); stats.errors++; }
   }
 
@@ -2753,7 +3521,7 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   log("→ Wiping source groups...");
   const sgResp = await aa26Fetch(cfg, "/api/v1/source-groups?per_page=100");
   const allSGs = sgResp.ok ? (sgResp.body.data || []) : [];
-  const targetSGs = isAll ? allSGs : allSGs.filter(sg => demoSourceNames.has(sg.name) || demoScanNames.has(sg.name));
+  const targetSGs = isAll ? allSGs : allSGs.filter(sg => isDemoSource(sg) || isDemoScan(sg));
   for (const sg of targetSGs) {
     const r = await aa26DeleteSourceGroup(cfg, sg.id);
     if (r.ok || r.status === 204) { log(`  ✓ Deleted source group "${sg.name}"`); stats.sgDel++; }
@@ -2775,8 +3543,62 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
     }
   }
 
+  // v3.0.2 — Phase 6: Reset MIP Label configuration + emit cleanup SQL
+  // The REST API call resets the sensitive-data-config row. The DELETE statements
+  // are emitted as a kubectl command the user runs to clean up the mip_labels table.
+  log("");
+  log("→ Resetting MIP Label configuration...");
+  try {
+    const dataTypeIds = ['ccpa','cmmc','credentials','financial_records','gdpr','gdpr_restricted','glba','hipaa','pci_dss','phi','pii'];
+    const resetBody = {
+      ocr_enabled: false,
+      enabled_data_types: dataTypeIds,
+      mip_entra_source_id: null,
+      data_type_mappings: dataTypeIds.map(id => ({data_type_id: id, enabled: true, mip_label_id: null})),
+      label_behavior: { allow_downgrade: false, allow_overwrite: false, clear_if_not_sensitive: false }
+    };
+    const r = await fetch(`${cfg.connection.url}/api/v1/sensitive-data-config`, {
+      method: 'PUT', credentials: 'include',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(resetBody)
+    });
+    if (r.ok) {
+      log(`  ✓ Cleared mip_entra_source_id + all label mappings via REST API`);
+      stats.mipReset = 1;
+    } else {
+      log(`  ✗ PUT sensitive-data-config returned HTTP ${r.status} (config may already be empty)`);
+    }
+  } catch (e) {
+    log(`  ⊘ Could not reset MIP config: ${e.message}`);
+  }
+
+  // Generate cleanup SQL for the mip_labels table — the user must run this via kubectl
+  // (Demo mode: labels for ALL Entra sources we know about. Full mode: all rows.)
+  // v3.0.7: multi-tenant — find ALL Entra sources, not just the first.
+  const allSourcesForWipe = await aa26GetSources(cfg);
+  const entraSourcesForWipe = allSourcesForWipe.filter(s => {
+    const t = (s.sourceTypeName || s.source_type_name || s.sourceType?.name || s.source_type?.name || '').toLowerCase();
+    return t.includes('entra') || t.includes('azure');
+  });
+  let deleteWhere = null;
+  if (isAll) {
+    deleteWhere = "1=1";
+  } else if (entraSourcesForWipe.length > 0) {
+    const idList = entraSourcesForWipe.map(s => `'${s.id}'::uuid`).join(", ");
+    deleteWhere = `source_id IN (${idList})`;
+  }
+  if (deleteWhere) {
+    const wipeSql = `BEGIN;\nDELETE FROM mip_labels WHERE ${deleteWhere};\nCOMMIT;`;
+    stats.mipWipeCmd = `kubectl exec -i postgres-0 -n access-analyzer -- psql -U postgres -d access_analyzer << 'EOSQL'\n${wipeSql}\nEOSQL`;
+    const tenantCount = isAll ? "all tenants" : `${entraSourcesForWipe.length} tenant${entraSourcesForWipe.length===1?"":"s"}`;
+    log(`  📋 ${isAll?"Full":"Demo"} MIP label cleanup SQL generated (covers ${tenantCount})`);
+  } else {
+    log(`  ⊘ No Entra source found — no MIP labels to clean up from mip_labels table`);
+  }
+
   log("");
   log(`Done. Deleted: ${stats.execDel} executions, ${stats.scanDel} scans, ${stats.srcDel} sources, ${stats.sgDel} source groups${isAll?`, ${stats.saDel} service accounts`:""}`);
+  if (stats.mipReset) log(`      MIP config reset via REST. Run the kubectl command below to also clear ${isAll?"all":"demo"} MIP labels.`);
   if (!isAll) log("Note: Service accounts preserved in Demo mode. Use Full Reset to remove them.");
   if (stats.errors > 0) log(`⚠ ${stats.errors} errors — review log above`);
   return stats;
@@ -2813,18 +3635,18 @@ function aa26ConfigPlan(cfg) {
         values: { client_secret: "DemoSecret_Placeholder" },
       },
       {
+        // v3.1.2: AA26 now self-generates the certificate ("Generate for me" — a
+        // self-signed RSA-2048 cert, 1yr validity) rather than requiring one be
+        // submitted. tenant_id also moved from root into values. Confirmed live
+        // against AA26 v1.1.5: no private_key is sent at all — the server creates
+        // both halves of the keypair on save. One less thing to fake for a demo.
         name: "SPO Reg App",
         service_account_type: "client_id_certificate",
         client_id: "00000000-0000-0000-0000-000000000002",
-        tenant_id: tenantId,
         parameters: [
-          {key:"client_certificate", label:"Certificate", type:"hidden", description:"", required:false},
-          {key:"private_key",        label:"Private Key", type:"hidden", description:"", required:false},
+          {key:"client_certificate", label:"Certificate", type:"hidden", description:"Auto-generated by AA on save", required:false},
         ],
-        values: {
-          client_certificate: "-----BEGIN CERTIFICATE-----\nDEMO_PLACEHOLDER\n-----END CERTIFICATE-----",
-          private_key:        "-----BEGIN PRIVATE KEY-----\nDEMO_PLACEHOLDER\n-----END PRIVATE KEY-----",
-        },
+        values: { tenant_id: tenantId },
       },
     ],
     // Sources reference service accounts by NAME; runtime maps to IDs after SAs are created
@@ -2855,9 +3677,35 @@ function aa26ConfigPlan(cfg) {
 }
 
 // Orchestrates the full config: creates SAs, then Sources, then Scans, with idempotency
+// v3.0.9: Format a duration in milliseconds as "Xh Ym Zs" / "Ym Zs" / "Zs" — used for phase timing
+function fmtPhaseDuration(ms) {
+  if (ms == null || isNaN(ms)) return "—";
+  const totalSec = Math.floor(ms / 1000);
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
 async function aa26RunFullConfig(cfg, log) {
   const plan = aa26ConfigPlan(cfg);
   const stats = { saCreated: 0, saSkipped: 0, srcCreated: 0, srcSkipped: 0, scnCreated: 0, scnSkipped: 0, errors: 0 };
+  // v3.1.0: track every created/touched ID so the wipe can identify demo-managed items by UUID
+  // regardless of name/region/hostname customizations between inject and wipe.
+  const createdIds = { serviceAccountIds: [], sourceIds: [], scanIds: [] };
+
+  // v3.2.2: discover this environment's REAL source-type UUIDs before touching Sources —
+  // sending a stale/mismatched UUID here is what caused every source create to HTTP 500.
+  let sourceTypes;
+  try {
+    sourceTypes = await aa26DiscoverSourceTypes(cfg);
+    log(`→ Discovered ${Object.keys(sourceTypes).length} source types live: ${Object.keys(sourceTypes).join(', ')}`);
+  } catch (e) {
+    log(`  ⚠ Source-type discovery failed (${e.message}) — falling back to hardcoded UUIDs from the original lab. These will likely be WRONG for this environment and cause source creation to fail.`);
+    sourceTypes = AA26_SOURCE_TYPES_FALLBACK;
+  }
 
   // ── Service Accounts
   log(`→ Phase 1/5: Service Accounts (${plan.serviceAccounts.length})`);
@@ -2865,28 +3713,32 @@ async function aa26RunFullConfig(cfg, log) {
   const saNameToId = {};
   existingSAs.forEach(s => { saNameToId[s.name] = s.id; });
   for (const sa of plan.serviceAccounts) {
-    if (saNameToId[sa.name]) { log(`  ⊘ Service Account "${sa.name}" exists (${saNameToId[sa.name]})`); stats.saSkipped++; continue; }
+    if (saNameToId[sa.name]) { log(`  ⊘ Service Account "${sa.name}" exists (${saNameToId[sa.name]})`); createdIds.serviceAccountIds.push(saNameToId[sa.name]); stats.saSkipped++; continue; }
     const r = await aa26CreateServiceAccount(cfg, sa);
-    if (r.ok) { saNameToId[sa.name] = r.body.id; log(`  ✓ Created "${sa.name}" (${r.body.id})`); stats.saCreated++; }
+    if (r.ok) { saNameToId[sa.name] = r.body.id; createdIds.serviceAccountIds.push(r.body.id); log(`  ✓ Created "${sa.name}" (${r.body.id})`); stats.saCreated++; }
     else { log(`  ✗ Failed "${sa.name}": HTTP ${r.status} — ${JSON.stringify(r.body).slice(0,180)}`); stats.errors++; }
   }
 
   // ── Sources
+  // v3.0.9: Time Phase 2 (Sources) — typically the slowest phase along with Phase 4
+  const phase2Start = Date.now();
   log(`→ Phase 2/5: Source Groups (${plan.sources.length})`);
   const existingSrcs = await aa26GetSources(cfg);
   const srcNameToId = {};
   existingSrcs.forEach(s => { srcNameToId[s.name] = s.id; });
   for (const src of plan.sources) {
-    if (srcNameToId[src.name]) { log(`  ⊘ Source "${src.name}" exists (${srcNameToId[src.name]})`); stats.srcSkipped++; continue; }
+    if (srcNameToId[src.name]) { log(`  ⊘ Source "${src.name}" exists (${srcNameToId[src.name]})`); createdIds.sourceIds.push(srcNameToId[src.name]); stats.srcSkipped++; continue; }
     const saId = saNameToId[src.serviceAccountName];
     if (!saId) { log(`  ✗ Source "${src.name}": missing service account "${src.serviceAccountName}"`); stats.errors++; continue; }
-    const sourceTypeId = AA26_SOURCE_TYPES[src.sourceTypeKey];
-    if (!sourceTypeId) { log(`  ✗ Source "${src.name}": unknown source type "${src.sourceTypeKey}"`); stats.errors++; continue; }
+    const sourceTypeId = sourceTypes[src.sourceTypeKey];
+    if (!sourceTypeId) { log(`  ⊘ Source "${src.name}": source type "${src.sourceTypeKey}" not available via API in this environment — skipping (not an error, just not creatable this way)`); continue; }
     const payload = { name: src.name, sourceTypeId, serviceAccountId: saId, connectionParameters: src.connectionParameters };
     const r = await aa26CreateSource(cfg, payload);
-    if (r.ok) { srcNameToId[src.name] = r.body.id; log(`  ✓ Created "${src.name}" (${r.body.id})`); stats.srcCreated++; }
+    if (r.ok) { srcNameToId[src.name] = r.body.id; createdIds.sourceIds.push(r.body.id); log(`  ✓ Created "${src.name}" (${r.body.id})`); stats.srcCreated++; }
     else { log(`  ✗ Failed "${src.name}": HTTP ${r.status} — ${JSON.stringify(r.body).slice(0,180)}`); stats.errors++; }
   }
+  stats.phase2Ms = Date.now() - phase2Start;
+  log(`  ⏱ Phase 2 completed in ${fmtPhaseDuration(stats.phase2Ms)} (${stats.srcCreated} created, ${stats.srcSkipped} skipped)`);
 
   // ── Scans
   log(`→ Phase 3/5: Scans (${plan.scans.length})`);
@@ -2898,10 +3750,17 @@ async function aa26RunFullConfig(cfg, log) {
     if (scanByName[scn.name]) { log(`  ⊘ Scan "${scn.name}" exists`); stats.scnSkipped++; createdScanIds.push({id: scanByName[scn.name].id, name: scn.name, scan_type: scn.scan_type}); continue; }
     const srcId = srcNameToId[scn.sourceName];
     if (!srcId) { log(`  ✗ Scan "${scn.name}": missing source "${scn.sourceName}"`); stats.errors++; continue; }
+    // v3.1.2: Scan API rewritten to camelCase — source_id became target:{mode,sourceIds:[]},
+    // and the cron_expression/cron_time_zone fields are dropped entirely (not just empty)
+    // when the schedule is manual. Confirmed live via intercept-and-abort against a real
+    // AA26 v1.1.5 lab. cronEnabled:false keeps every scan idle — never auto-runs against
+    // the fake demo hosts. NOTE: "sync" as a scanType value is carried over unverified —
+    // access_scan was directly confirmed live, sync/sensitive_data_scan were not re-tested
+    // this pass; if identity-sync scans fail to create, check this value first.
     const payload = {
-      name: scn.name, scan_type: scn.scan_type, source_id: srcId,
-      cron_expression: "0 0 * * *", cron_time_zone: "UTC", cron_enabled: false,
-      connection_parameters: {}, access_scan_parameters: {}, sensitive_data_scan_parameters: {},
+      name: scn.name, scanType: scn.scan_type,
+      target: { mode: "sources", sourceIds: [srcId] },
+      cronEnabled: false,
     };
     const r = await aa26CreateScan(cfg, payload);
     if (r.ok) { log(`  ✓ Created "${scn.name}" (${r.body.id})`); stats.scnCreated++; createdScanIds.push({id: r.body.id, name: scn.name, scan_type: scn.scan_type}); }
@@ -2912,27 +3771,122 @@ async function aa26RunFullConfig(cfg, log) {
   // Create one completed execution per scan to populate the Scan Executions page.
   // Limitations: API forces timestamps to "now" and object counts to 0 (server-side).
   // Status transitions: pending -> running -> completed (validated).
+  // v3.0.9: Time Phase 4 (Scan Executions) — N API calls × 3 state transitions each
+  const phase4Start = Date.now();
   log(`→ Phase 4/5: Scan Executions (${createdScanIds.length} simulated)`);
   stats.execCreated = 0;
   const newExecs = []; // Track newly created execution IDs for Phase 5
   for (const s of createdScanIds) {
-    // Check if executions already exist for this scan
+    // v3.0.1: ALWAYS create a new execution on each orchestrator run.
+    // Previously skipped if executions existed — but that prevented accumulating history
+    // across multiple runs. Now each run adds 1 new "today" execution + N historical clones
+    // (added by Phase 5 SQL), so re-running the orchestrator grows the timeline naturally.
     const existingExecs = await aa26GetScanExecutions(cfg, s.id);
-    if (existingExecs.length > 0) { log(`  ⊘ "${s.name}" already has ${existingExecs.length} execution(s)`); continue; }
+    if (existingExecs.length > 0) log(`  ℹ "${s.name}" has ${existingExecs.length} existing — adding new execution on top`);
     const r = await aa26SimulateExecution(cfg, s.id, s.scan_type);
     if (r.ok) { log(`  ✓ Execution for "${s.name}" (${r.execId})`); stats.execCreated++; newExecs.push({execId:r.execId, name:s.name, scan_type:s.scan_type}); }
     else { log(`  ✗ Execution for "${s.name}": ${r.error}`); stats.errors++; }
   }
+  stats.phase4Ms = Date.now() - phase4Start;
+  log(`  ⏱ Phase 4 completed in ${fmtPhaseDuration(stats.phase4Ms)} (${stats.execCreated} executions created)`);
 
-  // ── Phase 5: Generate post-setup SQL command (source groups + timestamp fixup + multi-execution history)
-  // The AA26 REST API cannot link sources to source groups, backdate timestamps, or insert multiple executions.
+  // ── Phase 6 (v3.0.7): MIP Labels — multi-tenant support
+  // Real AA26 pulls labels from a connected Entra tenant via Microsoft Graph. For demo
+  // purposes, we INSERT synthetic labels via Postgres for EVERY Entra source found,
+  // and configure the sensitive-data-config via REST so the AA26 UI shows them.
+  // The sensitive-data-config row is global (one per AA26 instance), so the PUT uses
+  // the FIRST Entra source as the "primary" tenant. Switching the tenant dropdown in
+  // the AA26 UI re-PUTs mip_entra_source_id — labels for ALL tenants stay valid because
+  // we use the same label_id strings (public/internal/confidential/highly_confidential)
+  // for every tenant.
+  let mipLabelData = null;
+  if (cfg.sd?.mipLabels?.enabled) {
+    const allSources = await aa26GetSources(cfg);
+    const entraSources = allSources.filter(s => {
+      const t = (s.sourceTypeName || s.source_type_name || s.sourceType?.name || s.source_type?.name || '').toLowerCase();
+      return t.includes('entra') || t.includes('azure');
+    });
+    if (entraSources.length === 0) {
+      log(``);
+      log(`→ Phase 6/6: MIP Labels SKIPPED — no Entra source found`);
+      log(`  Enable Identity Sources → Entra ID in Step 2 to use MIP labels.`);
+    } else {
+      // Generate fresh UUIDs PER TENANT (each row in mip_labels needs a unique uuid).
+      // Same label_id strings across all tenants so mappings resolve regardless of which
+      // tenant is active in the dropdown.
+      const sourcesWithLabels = entraSources.map(src => ({
+        sourceId: src.id,
+        sourceName: src.name,
+        labels: (cfg.sd.mipLabels.labels || []).map(lab => ({
+          ...lab,
+          uuid: uuid() // fresh per (tenant × label) — recreated every run
+        }))
+      }));
+      mipLabelData = { sources: sourcesWithLabels };
+
+      // Build data_type_mappings using the user's configured mappings (global, not per-tenant).
+      // v3.0.6 fix: AA26's /api/v1/mip-labels GET returns each label with `id` set to the
+      // label_id STRING ("public", "internal", etc.), NOT the row's UUID primary key.
+      // The frontend matches mappings.mip_label_id against that string id, so we must send
+      // the label_id string here — sending the UUID makes all 11 mappings show as "(removed)".
+      const mappings = cfg.sd.mipLabels.mappings || {};
+      const dataTypeIds = ['ccpa','cmmc','credentials','financial_records','gdpr','gdpr_restricted','glba','hipaa','pci_dss','phi','pii'];
+      const data_type_mappings = dataTypeIds.map(dtId => {
+        const labelKey = mappings[dtId];
+        return { data_type_id: dtId, enabled: true, mip_label_id: labelKey || null };
+      });
+
+      // PUT /api/v1/sensitive-data-config — wires up the GLOBAL mappings + PRIMARY Entra source.
+      // The "primary" tenant is the first Entra source found; user can switch in AA26 UI.
+      const primarySource = entraSources[0];
+      const totalLabelRows = sourcesWithLabels.reduce((sum, s) => sum + s.labels.length, 0);
+      const putBody = {
+        ocr_enabled: false,
+        enabled_data_types: dataTypeIds,
+        mip_entra_source_id: primarySource.id,
+        data_type_mappings,
+        label_behavior: { allow_downgrade: false, allow_overwrite: false, clear_if_not_sensitive: false }
+      };
+      try {
+        const r = await fetch(`${cfg.connection.url}/api/v1/sensitive-data-config`, {
+          method: 'PUT',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(putBody)
+        });
+        log(``);
+        log(`→ Phase 6/6: MIP Labels (${entraSources.length} Entra tenant${entraSources.length>1?'s':''})`);
+        if (r.ok) {
+          log(`  ✓ Wired sensitive-data-config to primary tenant "${primarySource.name}" with ${data_type_mappings.length} mappings`);
+          for (const src of sourcesWithLabels) {
+            log(`    • Will insert ${src.labels.length} labels for "${src.sourceName}"`);
+          }
+          log(`  ℹ Switch tenant dropdown in AA to see labels for any tenant (all share the same label_id strings)`);
+          log(`  ⚠ Synthetic labels (${totalLabelRows} total rows) will be inserted by the Phase 5 SQL below`);
+          stats.mipConfigured = totalLabelRows;
+          stats.mipTenants = entraSources.length;
+        } else {
+          log(`  ✗ PUT sensitive-data-config failed: HTTP ${r.status}`);
+          mipLabelData = null;
+          stats.errors++;
+        }
+      } catch (e) {
+        log(`  ✗ MIP config error: ${e.message}`);
+        mipLabelData = null;
+        stats.errors++;
+      }
+    }
+  }
+
+  // ── Phase 5: Generate post-setup SQL command (source groups + timestamp fixup + multi-execution history + MIP labels)
+  // The AA26 REST API cannot link sources to source groups, backdate timestamps, insert multiple executions, or insert MIP labels.
   // This generates a kubectl command the user runs on the AA26 server.
   const sourceNamesForGroups = plan.sources.map(s => s.name);
-  if (newExecs.length > 0 || sourceNamesForGroups.length > 0) {
-    const {cmd, summary} = aa26GeneratePostSetupSQL(sourceNamesForGroups, newExecs, cfg);
+  if (newExecs.length > 0 || sourceNamesForGroups.length > 0 || mipLabelData) {
+    const {cmd, summary} = aa26GeneratePostSetupSQL(sourceNamesForGroups, newExecs, cfg, mipLabelData);
     stats.postSetupCmd = cmd;
     log(``);
-    log(`→ Phase 5/5: Post-Setup SQL (copy to AA26 server)`);
+    log(`→ Phase 5/5: Post-Setup SQL (copy to AA server)`);
     log(`  Generated kubectl command to:`);
     if (sourceNamesForGroups.length > 0) log(`    • Create ${sourceNamesForGroups.length} source groups + link sources`);
     if (newExecs.length > 0) {
@@ -2940,15 +3894,28 @@ async function aa26RunFullConfig(cfg, log) {
       log(`    • Insert ${summary.historicalAdded} historical execution clones spread over ${summary.historyDays} days`);
       log(`      (~${Math.round(summary.historicalAdded / summary.latestUpdated)} historical executions per scan @ ${summary.scanFreq}-day intervals)`);
     }
-    log(`  Use the 📋 Copy button below to copy, then paste on the AA26 server.`);
+    if (summary.mipLabelsInserted > 0) {
+      log(`    • Insert ${summary.mipLabelsInserted} synthetic MIP labels across ${summary.mipTenants} Entra tenant${summary.mipTenants>1?'s':''}`);
+    }
+    log(`  Use the 📋 Copy button below to copy, then paste on the AA server.`);
   }
 
   log(``);
   log(`Done. Service Accounts: ${stats.saCreated} created, ${stats.saSkipped} skipped`);
-  log(`      Sources:          ${stats.srcCreated} created, ${stats.srcSkipped} skipped`);
+  log(`      Sources:          ${stats.srcCreated} created, ${stats.srcSkipped} skipped${stats.phase2Ms!=null?`  (Phase 2: ${fmtPhaseDuration(stats.phase2Ms)})`:""}`);
   log(`      Scans:            ${stats.scnCreated} created, ${stats.scnSkipped} skipped`);
-  log(`      Executions:       ${stats.execCreated} created`);
+  log(`      Executions:       ${stats.execCreated} created${stats.phase4Ms!=null?`  (Phase 4: ${fmtPhaseDuration(stats.phase4Ms)})`:""}`);
+  if (stats.mipConfigured) log(`      MIP Labels:       ${stats.mipConfigured} configured across ${stats.mipTenants||1} tenant${(stats.mipTenants||1)>1?'s':''} (visible after Phase 5 SQL runs)`);
   if (stats.errors > 0) log(`      ⚠ ${stats.errors} errors — review log above`);
+  // v3.0.8: expose the newly-created execution IDs so the UI can poll-verify Phase 5 SQL application
+  stats.newExecIds = newExecs.map(e => e.execId);
+  // v3.1.0: deduplicate tracked IDs (skipped pre-existing + newly-created may overlap)
+  // Also merge in scan IDs from createdScanIds since that loop was already tracking them
+  stats.createdIds = {
+    serviceAccountIds: [...new Set(createdIds.serviceAccountIds)],
+    sourceIds: [...new Set(createdIds.sourceIds)],
+    scanIds: [...new Set([...createdIds.scanIds, ...createdScanIds.map(s => s.id)])],
+  };
   return stats;
 }
 
@@ -3002,7 +3969,7 @@ async function reloadDictionaries(cfg, onProgress) {
     let probeResult;
     if (cfg.connection._mbSession) {
       const resp = await fetch(cfg.connection.url+'/metabase/api/dataset', {
-        method:'POST', headers:{'Content-Type':'application/json','X-Metabase-Session':cfg.connection._mbSession},
+        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
         body:JSON.stringify({database:cfg.connection.databaseId||2, type:'native', native:{query:probeSQL}})
       });
       probeResult = await resp.json();
@@ -3046,7 +4013,7 @@ async function reloadDictionaries(cfg, onProgress) {
         const sql = `SELECT count() FROM access_analyzer.${dict}`;
         if (cfg.connection._mbSession) {
           const resp = await fetch(cfg.connection.url+'/metabase/api/dataset', {
-            method:'POST', headers:{'Content-Type':'application/json','X-Metabase-Session':cfg.connection._mbSession},
+            method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
             body:JSON.stringify({database:cfg.connection.databaseId||2, type:'native', native:{query:sql}})
           });
           const j = await resp.json();
@@ -3118,7 +4085,7 @@ async function runMvBackfill(cfg, onProgress) {
       const sql = `SYSTEM REFRESH VIEW access_analyzer.${mvName}`;
       if (cfg.connection._mbSession) {
         const resp = await fetch(cfg.connection.url+'/metabase/api/dataset',{
-          method:'POST', headers:{'Content-Type':'application/json','X-Metabase-Session':cfg.connection._mbSession},
+          method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
           body:JSON.stringify({database:cfg.connection.databaseId||2, type:'native', native:{query:sql}})
         });
         const j = await resp.json();
@@ -3164,7 +4131,7 @@ async function runMvBackfill(cfg, onProgress) {
     const sql = `SELECT name, total_rows FROM system.tables WHERE database='access_analyzer' AND name IN ('mv_effective_permissions','mv_assigned_permissions','mv_principal','mv_actors','mv_objects','mv_current_objects','mv_group_membership') ORDER BY name`;
     if (cfg.connection._mbSession) {
       const resp = await fetch(cfg.connection.url+'/metabase/api/dataset',{
-        method:'POST', headers:{'Content-Type':'application/json','X-Metabase-Session':cfg.connection._mbSession},
+        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
         body:JSON.stringify({database:cfg.connection.databaseId||2, type:'native', native:{query:sql}})
       });
       const j = await resp.json();
@@ -3183,7 +4150,7 @@ async function runMvBackfill(cfg, onProgress) {
             try {
               // Discover the MV's SELECT query
               const defResp = await fetch(cfg.connection.url+'/metabase/api/dataset',{
-                method:'POST', headers:{'Content-Type':'application/json','X-Metabase-Session':cfg.connection._mbSession},
+                method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
                 body:JSON.stringify({database:cfg.connection.databaseId||2, type:'native', native:{query:"SHOW CREATE TABLE access_analyzer.mv_principal"}})
               });
               const defJ = await defResp.json();
@@ -3197,7 +4164,7 @@ async function runMvBackfill(cfg, onProgress) {
                   await mbInject(cfg, `INSERT INTO access_analyzer.mv_principal ${selectQuery}`);
                   // Verify
                   const vResp = await fetch(cfg.connection.url+'/metabase/api/dataset',{
-                    method:'POST', headers:{'Content-Type':'application/json','X-Metabase-Session':cfg.connection._mbSession},
+                    method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
                     body:JSON.stringify({database:cfg.connection.databaseId||2, type:'native', native:{query:"SELECT count() FROM access_analyzer.mv_principal"}})
                   });
                   const vJ = await vResp.json();
@@ -3229,7 +4196,7 @@ async function runMvBackfill(cfg, onProgress) {
 function outputKubectlRecoveryCommands(onProgress) {
   onProgress&&onProgress("━━━ KUBECTL RECOVERY COMMANDS ━━━");
   onProgress&&onProgress("Metabase API user cannot run SYSTEM RELOAD (Code 497).");
-  onProgress&&onProgress("To populate dictionaries, run THIS one-liner on the AA26 host:");
+  onProgress&&onProgress("To populate dictionaries, run THIS one-liner on the AA host:");
   onProgress&&onProgress("");
   onProgress&&onProgress(`kubectl exec -n access-analyzer clickhouse-0 -- clickhouse-client --multiquery --query "SYSTEM RELOAD DICTIONARY access_analyzer.entities_hier_dict; SYSTEM RELOAD DICTIONARY access_analyzer.domain_type_properties_dict; SYSTEM RELOAD DICTIONARY access_analyzer.path_metadata_dict; SYSTEM RELOAD DICTIONARY access_analyzer.permission_calc_rules_dict; SYSTEM RELOAD DICTIONARY access_analyzer.permission_grant_rules_dict; SYSTEM RELOAD DICTIONARY access_analyzer.source_settings_dict; SYSTEM RELOAD DICTIONARY access_analyzer.source_type_registry_dict;"`);
   onProgress&&onProgress("");
@@ -3243,19 +4210,30 @@ async function mbRefreshModelCards(cfg, onProgress) {
   const sid = cfg.connection._mbSession;
   if (!sid) { onProgress&&onProgress("Skipping model card refresh — no Metabase session"); return; }
   onProgress&&onProgress(`Refreshing ${MODEL_CARD_IDS.length} Metabase model cards (bust cache)...`);
-  let ok=0, fail=0;
+  let ok=0, fail=0, needsParams=0;
   for (const cardId of MODEL_CARD_IDS) {
     try {
       const resp = await fetch(cfg.connection.url + `/metabase/api/card/${cardId}/query`, {
-        method:'POST', headers:{'Content-Type':'application/json','X-Metabase-Session':sid},
+        method:'POST', headers:{'Content-Type':'application/json'}, credentials:'include',
         body:JSON.stringify({ignore_cache:true})
       });
       if (resp.ok || resp.status===202) { ok++; }
+      else if (resp.status===400) {
+        // v3.2.3: some cards require a dashboard-filter parameter (e.g. "share") to run
+        // standalone — that's not a broken card, just not cache-bustable this generic way.
+        const bodyTxt = await resp.text();
+        if (/missing required parameters/i.test(bodyTxt)) {
+          needsParams++;
+          onProgress&&onProgress(`  Card ${cardId}: needs a dashboard filter to run — refresh it manually on its dashboard`);
+        } else {
+          fail++; onProgress&&onProgress(`  Card ${cardId}: HTTP 400 — ${bodyTxt.slice(0,120)}`);
+        }
+      }
       else { fail++; onProgress&&onProgress(`  Card ${cardId}: HTTP ${resp.status}`); }
     } catch(e) { fail++; onProgress&&onProgress(`  Card ${cardId}: ${(e.message||'').slice(0,50)}`); }
   }
-  onProgress&&onProgress(`  Model cards refreshed: ${ok} ok, ${fail} failed`);
-  return {ok, fail};
+  onProgress&&onProgress(`  Model cards refreshed: ${ok} ok, ${needsParams} need manual dashboard refresh, ${fail} failed`);
+  return {ok, fail, needsParams};
 }
 
 /* ─── Components ──────────────────────────────────────── */
@@ -3293,9 +4271,9 @@ function Modal({open,onClose,title,children,t,danger}){
 }
 
 function Tooltip({text,children,t}){
-  return <span className="relative inline-block group">
+  return <span className="relative inline-block group/tooltip">
     {children}
-    <span className={cn("absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded text-[10px] whitespace-nowrap opacity-0 group-hover:opacity-100 transition pointer-events-none z-30 border",t.bgCard,t.border,t.text)}>{text}</span>
+    <span className={cn("absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 rounded text-[10px] whitespace-normal break-words w-max max-w-xs opacity-0 group-hover/tooltip:opacity-100 transition pointer-events-none z-30 border shadow-lg",t.bgCard,t.border,t.text)}>{text}</span>
   </span>;
 }
 
@@ -3398,7 +4376,6 @@ function StepConnection({cfg,setCfg,t,toast}){
   const [isFirstRun,setIsFirstRun]=useState(true);
   const [grantMsg,setGrantMsg]=useState("");
   const [showGuide,setShowGuide]=useState(false);
-  const [showSetup,setShowSetup]=useState(false);
   // v3.0 — Health check & profiles
   const [healthChecks,setHealthChecks]=useState(null);
   const [healthBusy,setHealthBusy]=useState(false);
@@ -3414,36 +4391,59 @@ function StepConnection({cfg,setCfg,t,toast}){
   const testMetabase=async()=>{
     setMbStatus("testing");setMbInfo("");
     try{
-      const r=await fetch(cfg.connection.url+'/metabase/api/session',{method:'POST',headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({username:cfg.connection.mb_user||'api@metabase.local',password:cfg.connection.mb_pass})});
-      const d=await r.json();
-      if(d.id){setMbSessionId(d.id);setCfg(p=>({...p,connection:{...p.connection,_mbSession:d.id}}));
-        // Test query
-        const q=await fetch(cfg.connection.url+'/metabase/api/dataset',{method:'POST',headers:{'Content-Type':'application/json','X-Metabase-Session':d.id},
-          body:JSON.stringify({database:2,type:'native',native:{query:"SELECT currentUser(), version()"}})});
-        const qd=await q.json();
-        const info=(qd.data&&qd.data.rows&&qd.data.rows[0])?qd.data.rows[0].join(' / '):'Connected';
-        setMbStatus("ok");setMbInfo(info);
-        // V2.6.13: Auto-discover schemas after successful connection — no extra click needed
-        setSchemaStatus("discovering");setSchemaMsg("Auto-discovering schemas...");
+      // v3.1.2: Direct Metabase username/password login (POST /metabase/api/session)
+      // now returns a flat 403 in this AA26 version — confirmed live it's blocked at
+      // the gateway, not a Metabase auth error. AA26 mediates Metabase auth via JWT SSO
+      // instead: exchange the caller's own (already-authenticated) AA26 session for a
+      // Metabase one. mb_user/mb_pass are no longer used — this only works when the
+      // browser already has a live AA26 session (same-origin deployment, as designed).
+      const ssoResp=await fetch(cfg.connection.url+'/api/v1/auth/metabase/sso?response=json',{credentials:'include'});
+      if(!ssoResp.ok) throw new Error(`AA SSO endpoint returned HTTP ${ssoResp.status} — make sure you're logged into AA in this browser tab first.`);
+      const ssoJson=await ssoResp.json();
+      if(!ssoJson.jwt) throw new Error("AA SSO endpoint didn't return a token — check you're logged into AA in this browser.");
+      const exchResp=await fetch(cfg.connection.url+'/metabase/auth/sso?jwt='+encodeURIComponent(ssoJson.jwt),{credentials:'include'});
+      if(!exchResp.ok) throw new Error(`Metabase SSO exchange returned HTTP ${exchResp.status}`);
+      const meResp=await fetch(cfg.connection.url+'/metabase/api/user/current',{credentials:'include'});
+      if(!meResp.ok) throw new Error("Metabase session didn't establish after SSO exchange — check same-origin deployment.");
+      const me=await meResp.json();
+
+      // v3.1.2: discover the real ClickHouse database id instead of assuming 2.
+      // This environment now ships a decoy "...Sample" database — hardcoding an id
+      // silently injects into the wrong one with no error. Match by engine + name.
+      const dbListResp=await fetch(cfg.connection.url+'/metabase/api/database',{credentials:'include'});
+      const dbListJson=await dbListResp.json();
+      const dbList=Array.isArray(dbListJson)?dbListJson:(dbListJson.data||[]);
+      const chDbs=dbList.filter(d=>d.engine==='clickhouse');
+      const chosen=chDbs.find(d=>!/sample/i.test(d.name||''))||chDbs[0];
+      if(!chosen) throw new Error("No ClickHouse database visible via Metabase — check Metabase's own database connections.");
+      const databaseId=chosen.id;
+
+      setMbSessionId('cookie');setCfg(p=>({...p,connection:{...p.connection,_mbSession:'cookie',databaseId}}));
+      // Test query
+      const q=await fetch(cfg.connection.url+'/metabase/api/dataset',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+        body:JSON.stringify({database:databaseId,type:'native',native:{query:"SELECT currentUser(), version()"}})});
+      const qd=await q.json();
+      const info=(qd.data&&qd.data.rows&&qd.data.rows[0])?qd.data.rows[0].join(' / '):'Connected';
+      setMbStatus("ok");setMbInfo(`${info} — DB #${databaseId} "${chosen.name}" (as ${me.email||me.common_name||'authenticated user'})`);
+      // V2.6.13: Auto-discover schemas after successful connection — no extra click needed
+      setSchemaStatus("discovering");setSchemaMsg("Auto-discovering schemas...");
+      try{
+        const cfgWithSession={...cfg,connection:{...cfg.connection,_mbSession:'cookie',databaseId}};
+        const schemas=await mbDiscoverAllSchemas(cfgWithSession);
+        // V2.6.13: Check if this is a first run (entities table empty → no prior inject)
+        let firstRun=true;
         try{
-          const cfgWithSession={...cfg,connection:{...cfg.connection,_mbSession:d.id}};
-          const schemas=await mbDiscoverAllSchemas(cfgWithSession);
-          // V2.6.13: Check if this is a first run (entities table empty → no prior inject)
-          let firstRun=true;
-          try{
-            const rc=await fetch(cfg.connection.url+'/metabase/api/dataset',{method:'POST',headers:{'Content-Type':'application/json','X-Metabase-Session':d.id},
-              body:JSON.stringify({database:2,type:'native',native:{query:"SELECT count() FROM access_analyzer.entities"}})});
-            const rcd=await rc.json();
-            if(rcd.data&&rcd.data.rows&&rcd.data.rows[0]&&parseInt(rcd.data.rows[0][0])>0) firstRun=false;
-          }catch(e){/* ignore — assume first run */}
-          setIsFirstRun(firstRun);
-          setCfg(p=>({...p,_schemas:schemas,connection:{...p.connection,_mbSession:d.id}}));
-          const found=Object.keys(schemas);
-          if(found.length===0){setSchemaStatus("warn");setSchemaMsg("No tables found — they may not exist yet in this AA26 build");}
-          else{setSchemaStatus("ok");setSchemaMsg(`Discovered: ${found.join(', ')} (${found.map(t=>schemas[t].length+' cols').join(', ')})`);}
-        }catch(e){setSchemaStatus("fail");setSchemaMsg("Auto-discover failed: "+e.message);}
-      }else{setMbStatus("fail");setMbInfo((d.errors&&d.errors.password)||(d.errors&&d.errors.username)||JSON.stringify(d).slice(0,100));}
+          const rc=await fetch(cfg.connection.url+'/metabase/api/dataset',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+            body:JSON.stringify({database:databaseId,type:'native',native:{query:"SELECT count() FROM access_analyzer.entities"}})});
+          const rcd=await rc.json();
+          if(rcd.data&&rcd.data.rows&&rcd.data.rows[0]&&parseInt(rcd.data.rows[0][0])>0) firstRun=false;
+        }catch(e){/* ignore — assume first run */}
+        setIsFirstRun(firstRun);
+        setCfg(p=>({...p,_schemas:schemas,connection:{...p.connection,_mbSession:'cookie',databaseId}}));
+        const found=Object.keys(schemas);
+        if(found.length===0){setSchemaStatus("warn");setSchemaMsg("No tables found — they may not exist yet in this AA build");}
+        else{setSchemaStatus("ok");setSchemaMsg(`Discovered: ${found.join(', ')} (${found.map(t=>schemas[t].length+' cols').join(', ')})`);}
+      }catch(e){setSchemaStatus("fail");setSchemaMsg("Auto-discover failed: "+e.message);}
     }catch(e){setMbStatus("fail");setMbInfo(e.message);}
   };
 
@@ -3451,201 +4451,80 @@ function StepConnection({cfg,setCfg,t,toast}){
     if(!mbSessionId){setGrantStatus("fail");setGrantMsg("Connect to Metabase first");return;}
     setGrantStatus("granting");
     try{
-      const r=await fetch(cfg.connection.url+'/metabase/api/dataset',{method:'POST',headers:{'Content-Type':'application/json','X-Metabase-Session':mbSessionId},
-        body:JSON.stringify({database:2,type:'native',native:{query:"GRANT INSERT, TRUNCATE, ALTER DELETE, ALTER UPDATE ON access_analyzer.* TO access_analyzer_metabase"}})});
-      const d=await r.json();
-      if(d.status==='failed'&&(d.error||"").indexOf('ACCESS_DENIED')>=0){setGrantStatus("fail");setGrantMsg("Metabase user lacks GRANT privilege. Run the kubectl command below instead.");}
-      else{setGrantStatus("ok");setGrantMsg("INSERT granted successfully");}
+      // v3.2.4: two separate GRANTs — DML privileges are scoped to access_analyzer.*, but
+      // dictionary reload / MV refresh need SYSTEM-level privileges scoped to *.* — confirmed
+      // live these are a genuinely separate privilege fight from the basic INSERT/TRUNCATE one.
+      await fetch(cfg.connection.url+'/metabase/api/dataset',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+        body:JSON.stringify({database:cfg.connection.databaseId||2,type:'native',native:{query:"GRANT INSERT, TRUNCATE, ALTER DELETE, ALTER UPDATE ON access_analyzer.* TO access_analyzer_metabase"}})});
+      await fetch(cfg.connection.url+'/metabase/api/dataset',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+        body:JSON.stringify({database:cfg.connection.databaseId||2,type:'native',native:{query:"GRANT SYSTEM RELOAD DICTIONARY, SYSTEM REFRESH VIEW ON *.* TO access_analyzer_metabase"}})});
+      // v3.2.8: the self-grant attempts above only tell us whether *this click* succeeded at
+      // granting — they say nothing about privileges already in place some other way (e.g. run
+      // manually via kubectl, as an admin, outside this app). Verify actual current state.
+      // v3.2.9: switched from querying system.grants (WHERE user_name=...) to bare SHOW GRANTS —
+      // querying system.grants directly can itself be visibility-restricted for non-admin users
+      // (a query failure there was indistinguishable from "found zero grants" and produced a
+      // false "neither privilege found" even when injection was already proven working), and it
+      // misses privileges assigned via a role rather than directly to the user. SHOW GRANTS shows
+      // the *effective* set for whoever's asking, resolving role membership automatically.
+      const vr=await fetch(cfg.connection.url+'/metabase/api/dataset',{method:'POST',headers:{'Content-Type':'application/json'},credentials:'include',
+        body:JSON.stringify({database:cfg.connection.databaseId||2,type:'native',native:{query:"SHOW GRANTS"}})});
+      const vd=await vr.json();
+      const rows=(vd.data&&vd.data.rows)||null;
+      if(!rows){setGrantStatus("fail");setGrantMsg("Couldn't read current grants to verify (SHOW GRANTS query itself failed) — this button's status is unreliable right now. The safest check is just trying a real Fresh Install/Inject: if it completes with 0 errors, permissions are fine regardless of what this says.");}
+      else{
+        const grantedStr=rows.map(r=>r.join(' ')).join(' | ');
+        const hasDml=/INSERT|TRUNCATE/i.test(grantedStr);
+        const hasSys=/RELOAD DICTIONARY|REFRESH VIEW/i.test(grantedStr);
+        if(hasDml&&hasSys){setGrantStatus("ok");setGrantMsg("Verified: INSERT/TRUNCATE + dictionary/MV refresh privileges are in place (however they got there — self-grant or kubectl).");}
+        else if(hasDml&&!hasSys){setGrantStatus("fail");setGrantMsg("INSERT/TRUNCATE confirmed in place, but SYSTEM RELOAD DICTIONARY/REFRESH VIEW not found for this user yet. Run the kubectl command below (safe to re-run even if you ran an older version of it before).");}
+        else if(!hasDml&&hasSys){setGrantStatus("fail");setGrantMsg("SYSTEM RELOAD DICTIONARY/REFRESH VIEW confirmed, but INSERT/TRUNCATE not found yet. Run the kubectl command below.");}
+        else{setGrantStatus("fail");setGrantMsg("Neither privilege set found via SHOW GRANTS. If Fresh Install/Inject has already worked with 0 errors, this check itself may be unreliable in this environment — trust the real inject result over this button.");}
+      }
     }catch(e){setGrantStatus("fail");setGrantMsg(e.message);}
   };
 
-  const grantCmd=`sudo kubectl exec -it -n access-analyzer clickhouse-0 -- clickhouse-client -q "GRANT INSERT, TRUNCATE, ALTER DELETE, ALTER UPDATE ON access_analyzer.* TO access_analyzer_metabase"`;
+  const grantCmd=`sudo kubectl exec -it -n access-analyzer clickhouse-0 -- clickhouse-client --multiquery --query "GRANT INSERT, TRUNCATE, ALTER DELETE, ALTER UPDATE ON access_analyzer.* TO access_analyzer_metabase; GRANT SYSTEM RELOAD DICTIONARY, SYSTEM REFRESH VIEW ON *.* TO access_analyzer_metabase;"`;
   const passCmd=`sudo k3s kubectl exec -n access-analyzer $(sudo k3s kubectl get pods -n access-analyzer | grep '^metabase-' | grep -v 'appdb\\|setup' | awk '{print $1}' | head -1) -- env | grep MB_API_USER_PASSWORD`;
 
   return <div className="space-y-5">
     <SH n={1} title="🔌 Connection & Credentials" t={t}/>
 
-    {/* v3.0 — Config Presets (moved to top) */}
-    <Card t={t}>
-      <details>
-        <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}>💾 Config Presets <span className={cn("text-xs font-normal",t.textFaint)}>— Save & load full configuration as JSON</span></summary>
-        <div className="mt-3 space-y-2">
-          <p className={cn("text-xs",t.textFaint)}>Export your current configuration (Organization, Identity, Data Sources, Classification) to JSON. Share with team members or save for later use.</p>
-          <div className="flex items-center gap-2">
-            <button onClick={()=>{
-              const exportCfg = {...cfg, connection: {...cfg.connection, mb_pass: "", _mbSession: undefined, aa26SessionCookie: ""}};
-              const blob = new Blob([JSON.stringify(exportCfg,null,2)],{type:"application/json"});
-              const a = document.createElement("a");
-              a.href = URL.createObjectURL(blob);
-              a.download = `aa26-config-${cfg.global?.domainName||"demo"}-${new Date().toISOString().slice(0,10)}.json`;
-              a.click();
-              if(toast)toast("Configuration exported","success");
-            }} className={cn("text-xs px-3 py-1.5 rounded-lg font-semibold border transition",t.btnSecondary)}>📥 Export Config</button>
-            <label className={cn("text-xs px-3 py-1.5 rounded-lg font-semibold border transition cursor-pointer",t.btnSecondary)}>📤 Import Config
-              <input type="file" accept=".json" className="hidden" onChange={async e=>{
-                const f=e.target.files[0];if(!f)return;
-                try{
-                  const text=await f.text();
-                  const imported=JSON.parse(text);
-                  setCfg(prev=>({...prev,...imported,connection:{...prev.connection,...(imported.connection||{}),mb_pass:prev.connection.mb_pass,_mbSession:prev.connection._mbSession,aa26SessionCookie:prev.connection.aa26SessionCookie}}));
-                  if(toast)toast(`Imported config: ${imported.global?.domainName||"unknown"}`,"success");
-                }catch(err){if(toast)toast(`Import failed: ${err.message}`,"error");}
-                e.target.value="";
-              }}/>
-            </label>
-          </div>
-        </div>
-      </details>
-    </Card>
+    {/* v3.2.4: Config Presets moved to a header icon button — see the 💾 button next to the tab nav */}
 
-    {/* V2.6.5: First-time server setup guide — one-time GRANT required for full automation */}
     <Card t={t}>
       <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2">
-          <span className={cn("text-sm font-semibold",t.text)}>🛠 First-Time Server Setup (one-time per AA26 install)</span>
-          <Badge variant="warn" t={t}>Required for full automation</Badge>
-        </div>
-        <button onClick={()=>setShowSetup(!showSetup)} className={cn("text-xs",t.accent)}>{showSetup?"Hide":"Show"} setup steps</button>
-      </div>
-      {showSetup&&<div className="space-y-3 text-xs">
-        <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className={cn("font-semibold mb-2",t.text)}>Why this is needed</div>
-          <p className={cn(t.textFaint,"leading-relaxed")}>AA26 stores entity hierarchy in ClickHouse <b>dictionaries</b>. Reports that show Access, Activity, Nested Shares, or New/Stale users read through <b>materialized views</b> that JOIN to those dictionaries via <code className={cn("px-1 rounded",t.codeBlock)}>dictGet()</code>. After bulk INSERT of demo data, dictionaries stay stale until <code className={cn("px-1 rounded",t.codeBlock)}>SYSTEM RELOAD DICTIONARY</code> is run — which requires admin privileges the Metabase API user lacks by default. This setup grants the Metabase user just enough privilege to reload dictionaries itself, so demo iteration becomes one-click.</p>
-        </div>
-
-        <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className={cn("font-semibold mb-2",t.text)}>Step 1: SSH to the AA26 host</div>
-          <p className={cn(t.textFaint,"mb-2")}>You need <code className={cn("px-1 rounded",t.codeBlock)}>sudo kubectl</code> permissions on the host where AA26 is deployed (typically <code className={cn("px-1 rounded",t.codeBlock)}>appaa.cloud.lab</code> or equivalent).</p>
-        </div>
-
-        <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className="flex items-center justify-between mb-2">
-            <div className={cn("font-semibold",t.text)}>Step 2: Discover ClickHouse admin credentials from K8s secret</div>
-            <button onClick={()=>navigator.clipboard.writeText(`CHUSER=$(sudo kubectl get secret clickhouse-secret -n access-analyzer -o jsonpath='{.data.username}' | base64 -d)\nCHPASS=$(sudo kubectl get secret clickhouse-secret -n access-analyzer -o jsonpath='{.data.password}' | base64 -d)\nCHIP=$(sudo kubectl get svc clickhouse -n access-analyzer -o jsonpath='{.spec.clusterIP}')\necho "User: $CHUSER, IP: $CHIP"`)} className={cn("text-xs px-2 py-1 rounded border",t.btnSecondary)}>📋 Copy</button>
-          </div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto",t.codeBlock,t.text)}>{`CHUSER=$(sudo kubectl get secret clickhouse-secret -n access-analyzer -o jsonpath='{.data.username}' | base64 -d)
-CHPASS=$(sudo kubectl get secret clickhouse-secret -n access-analyzer -o jsonpath='{.data.password}' | base64 -d)
-CHIP=$(sudo kubectl get svc clickhouse -n access-analyzer -o jsonpath='{.spec.clusterIP}')
-echo "User: $CHUSER, IP: $CHIP"`}</pre>
-          <p className={cn(t.textFaint,"mt-2 text-xs")}>This pulls admin credentials from the <code className={cn("px-1 rounded",t.codeBlock)}>clickhouse-secret</code> K8s secret and the ClickHouse service ClusterIP. These vars are used in the next steps.</p>
-        </div>
-
-        <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className="flex items-center justify-between mb-2">
-            <div className={cn("font-semibold",t.text)}>Step 3: Test admin connection</div>
-            <button onClick={()=>navigator.clipboard.writeText(`curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data 'SELECT version()'`)} className={cn("text-xs px-2 py-1 rounded border",t.btnSecondary)}>📋 Copy</button>
-          </div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto",t.codeBlock,t.text)}>{`curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data 'SELECT version()'`}</pre>
-          <p className={cn(t.textFaint,"mt-2 text-xs")}>Should print the ClickHouse version (e.g. <code className={cn("px-1 rounded",t.codeBlock)}>25.8.13</code>). If you get an error here, fix the connection before continuing.</p>
-        </div>
-
-        <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className="flex items-center justify-between mb-2">
-            <div className={cn("font-semibold",t.text)}>Step 4: Grant required privileges to Metabase user (4 GRANTs)</div>
-            <button onClick={()=>navigator.clipboard.writeText(`curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data "GRANT SYSTEM RELOAD DICTIONARY ON *.* TO access_analyzer_metabase"\ncurl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data "GRANT OPTIMIZE ON access_analyzer.* TO access_analyzer_metabase"\ncurl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data "GRANT SELECT ON system.dictionaries TO access_analyzer_metabase"\ncurl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data "GRANT SYSTEM REFRESH VIEW ON *.* TO access_analyzer_metabase"`)} className={cn("text-xs px-2 py-1 rounded border",t.btnSecondary)}>📋 Copy</button>
-          </div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto",t.codeBlock,t.text)}>{`# 1) Dictionary reload (so the app can refresh entity hierarchies)
-curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" \\
-  --data "GRANT SYSTEM RELOAD DICTIONARY ON *.* TO access_analyzer_metabase"
-
-# 2) OPTIMIZE (lets the app force ReplacingMergeTree merges)
-curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" \\
-  --data "GRANT OPTIMIZE ON access_analyzer.* TO access_analyzer_metabase"
-
-# 3) Read system.dictionaries (so the app can probe dict state)
-curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" \\
-  --data "GRANT SELECT ON system.dictionaries TO access_analyzer_metabase"
-
-# 4) V2.6.7: Trigger refresh on REFRESHABLE MVs (mv_effective_permissions etc.)
-curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" \\
-  --data "GRANT SYSTEM REFRESH VIEW ON *.* TO access_analyzer_metabase"`}</pre>
-          <p className={cn(t.textFaint,"mt-2 text-xs")}>All four should return blank (success). If you get <code className={cn("px-1 rounded",t.codeBlock)}>Code: 497</code> on any of them, the admin user lacks WITH GRANT OPTION — see Status doc for backup paths. Grant #4 is new in v2.6.7 and required for the refreshable materialized views (SP Access etc.) to populate on demand.</p>
-        </div>
-
-        <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className="flex items-center justify-between mb-2">
-            <div className={cn("font-semibold",t.text)}>Step 5: Verify grants applied</div>
-            <button onClick={()=>navigator.clipboard.writeText(`curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data "SHOW GRANTS FOR access_analyzer_metabase"`)} className={cn("text-xs px-2 py-1 rounded border",t.btnSecondary)}>📋 Copy</button>
-          </div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto",t.codeBlock,t.text)}>{`curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" \\
-  --data "SHOW GRANTS FOR access_analyzer_metabase"`}</pre>
-          <p className={cn(t.textFaint,"mt-2 text-xs")}>Expected output (note: ClickHouse normalizes <code className={cn("px-1 rounded",t.codeBlock)}>SYSTEM REFRESH VIEW</code> into the umbrella privilege <code className={cn("px-1 rounded",t.codeBlock)}>SYSTEM VIEWS</code>):</p>
-          <pre className={cn("p-2 rounded text-xs mt-1 overflow-x-auto",t.codeBlock,t.text)}>{`GRANT SYSTEM RELOAD DICTIONARY, SYSTEM VIEWS ON *.* TO access_analyzer_metabase
-GRANT SELECT, INSERT, ALTER UPDATE, ALTER DELETE, TRUNCATE, OPTIMIZE ON access_analyzer.* TO access_analyzer_metabase
-GRANT SELECT ON access_analyzer_sample.* TO access_analyzer_metabase
-GRANT SELECT ON system.dictionaries TO access_analyzer_metabase
-GRANT analysis_reader TO access_analyzer_metabase`}</pre>
-        </div>
-
-        <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className={cn("font-semibold mb-2",t.text)}>Step 6: Deploy Demo Data Manager on the AA26 Server</div>
-          <p className={cn(t.textFaint,"mb-2")}>Deploy on the AA26 server for full functionality (auto-authentication, AA26 Configuration API). This creates a lightweight nginx pod serving the HTML at <code className={cn("px-1 rounded",t.codeBlock)}>/demo-manager/</code>.</p>
-          <div className={cn("font-semibold text-xs mb-1",t.text)}>On your workstation — cd to the folder where you saved the downloaded HTML, then copy it to the AA26 server:</div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`cd ~/Downloads   # or wherever demo-data-manager.html is saved
-scp demo-data-manager.html sysadmin@appaa:demo-data-manager
-scp demo-manager.yaml sysadmin@appaa:demo-data-manager`}</pre>
-          <div className={cn("font-semibold text-xs mb-1",t.text)}>On the AA26 server (SSH) — initial install (first time only):</div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`kubectl create configmap demo-manager-html \\
-  --from-file=index.html=/home/sysadmin/demo-data-manager/demo-data-manager.html \\
-  -n default
-kubectl apply -f /home/sysadmin/demo-data-manager/demo-manager.yaml`}</pre>
-          <p className={cn(t.textFaint,"text-xs mb-2")}>Then open <code className={cn("px-1 rounded",t.codeBlock)}>{`https://<aa26-host>/demo-manager/`}</code> in your browser. You should see Auto Mode (Same-Origin) enabled.</p>
-          <div className={cn("font-semibold text-xs mb-1",t.textFaint)}>Alternative — local workstation (limited, no AA26 Configuration features):</div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-1",t.codeBlock,t.textFaint)}>{`python3 -m http.server 8080  # then open http://localhost:8080/demo-data-manager.html`}</pre>
-        </div>
-
-        <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className={cn("font-semibold mb-2",t.text)}>Step 7: Updating the Demo Data Manager</div>
-          <p className={cn(t.textFaint,"mb-2")}>When a new version is released, update the HTML file on the AA26 server:</p>
-          <div className={cn("font-semibold text-xs mb-1",t.text)}>On your workstation — cd to the folder where you downloaded the new HTML, then copy it:</div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`cd ~/Downloads   # or wherever the new demo-data-manager.html is saved
-scp demo-data-manager.html sysadmin@appaa:demo-data-manager`}</pre>
-          <div className={cn("font-semibold text-xs mb-1",t.text)}>On the AA26 server (SSH):</div>
-          <pre className={cn("p-2 rounded text-xs overflow-x-auto mb-2",t.codeBlock,t.text)}>{`# Check current version on disk
-grep "APP_VERSION" /home/sysadmin/demo-data-manager/demo-data-manager.html
-
-# Update ConfigMap and restart (use 'replace' not 'apply')
-kubectl create configmap demo-manager-html \\
-  --from-file=index.html=/home/sysadmin/demo-data-manager/demo-data-manager.html \\
-  -n default --dry-run=client -o yaml | kubectl replace -f -
-kubectl rollout restart deployment/demo-manager -n default`}</pre>
-          <p className={cn(t.textFaint,"text-xs")}>Hard-refresh your browser (<code className={cn("px-1 rounded",t.codeBlock)}>Ctrl+Shift+R</code>) to see the new version in the header.</p>
-        </div>
-
-        <div className={cn("p-3 rounded border-2 border-emerald-500/40 bg-emerald-500/5")}>
-          <div className={cn("font-semibold mb-1",t.text)}>✅ After setup completes</div>
-          <p className={cn(t.textFaint)}>Connect via the Metabase API form below (schemas auto-discover on connect). Then proceed to Generate → Inject. The app will handle SYSTEM RELOAD and MV backfill automatically — no more kubectl. This setup persists until the ClickHouse pod is recreated from scratch.</p>
-          <p className={cn(t.textFaint,"mt-2")}><b>Re-runs:</b> "Inject All" always wipes before inserting — data is overwritten, never duplicated. You can re-generate and re-inject as many times as needed.</p>
-        </div>
-
-        <div className={cn("p-3 rounded border",t.bgCard,t.border)}>
-          <div className={cn("font-semibold mb-2",t.text)}>One-liner (advanced — runs steps 2-5 with all 4 GRANTs in sequence)</div>
-          <button onClick={()=>navigator.clipboard.writeText(`CHUSER=$(sudo kubectl get secret clickhouse-secret -n access-analyzer -o jsonpath='{.data.username}' | base64 -d) && CHPASS=$(sudo kubectl get secret clickhouse-secret -n access-analyzer -o jsonpath='{.data.password}' | base64 -d) && CHIP=$(sudo kubectl get svc clickhouse -n access-analyzer -o jsonpath='{.spec.clusterIP}') && curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data "GRANT SYSTEM RELOAD DICTIONARY ON *.* TO access_analyzer_metabase" && curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data "GRANT OPTIMIZE ON access_analyzer.* TO access_analyzer_metabase" && curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data "GRANT SELECT ON system.dictionaries TO access_analyzer_metabase" && curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data "GRANT SYSTEM REFRESH VIEW ON *.* TO access_analyzer_metabase" && curl -X POST "http://$CHIP:8123/" -u "$CHUSER:$CHPASS" --data "SHOW GRANTS FOR access_analyzer_metabase"`)} className={cn("text-xs px-2 py-1 rounded border",t.btnSecondary)}>📋 Copy one-liner</button>
-        </div>
-      </div>}
-    </Card>
-
-    {/* Metabase API — Primary Path */}
-    <Card t={t}>
-      <div className="flex items-center justify-between mb-3">
-        <div className="flex items-center gap-2"><span className={cn("text-sm font-semibold",t.text)}>🔑 Metabase API login</span><Badge variant="success" t={t}>Recommended</Badge></div>
+        <div className="flex items-center gap-2"><span className={cn("text-sm font-semibold",t.text)}>🔑 Metabase Connection</span><Badge variant="success" t={t}>Recommended</Badge></div>
         <button onClick={()=>setShowGuide(!showGuide)} className={cn("text-xs",t.accent)}>{showGuide?"Hide":"Show"} setup guide</button>
       </div>
+      {/* v3.1.2: this AA26 version blocks direct Metabase username/password login (403 at
+          the gateway) — Metabase auth is now mediated by your existing AA session via
+          JWT SSO. No credentials to enter here; just be logged into AA in this browser
+          tab and hosted same-origin, then click Connect. */}
+      <p className={cn("text-xs mb-2",t.textFaint)}>Uses your existing AA session (same-origin) — no separate Metabase login needed.</p>
       <div className="grid grid-cols-3 gap-3">
-        <Input label="AA26 URL" value={cfg.connection.url} onChange={v=>u("url",v)} t={t}/>
-        <Input label="Metabase Username" value={cfg.connection.mb_user||"api@metabase.local"} onChange={v=>u("mb_user",v)} t={t}/>
-        <Input label="Metabase Password" value={cfg.connection.mb_pass||""} onChange={v=>u("mb_pass",v)} type="password" t={t}/>
+        <Input label="AA URL" value={cfg.connection.url} onChange={v=>u("url",v)} t={t}/>
       </div>
       <div className="flex items-center gap-3 mt-3">
-        <button onClick={testMetabase} disabled={mbStatus==="testing"||!cfg.connection.mb_pass} className={cn("px-4 py-1.5 rounded-lg text-sm font-semibold transition",!cfg.connection.mb_pass?"opacity-40 cursor-not-allowed":t.btnPrimary)}>
+        <button onClick={testMetabase} disabled={mbStatus==="testing"} className={cn("px-4 py-1.5 rounded-lg text-sm font-semibold transition",t.btnPrimary)}>
           {mbStatus==="testing"?"Connecting...":"Connect"}</button>
         {mbStatus==="ok"&&<Badge variant="success" t={t}>Connected — {mbInfo}</Badge>}
       {mbStatus==="fail"&&<div className="mt-2 space-y-2">
-        <Badge variant="warn" t={t}>CORS blocked — expected when running from claude.ai</Badge>
-        <p className={cn("text-xs",t.textFaint)}>The Connect + Inject features work when this app is hosted on the AA26 server (same origin). From here, use <strong>Generate → Download SQL</strong> instead, or run the injection via the terminal commands below.</p>
-        <p className={cn("text-xs",t.textFaint)}>To host this app on AA26, copy the .jsx file to the server and serve it via nginx on the same domain.</p>
+        <Badge variant="warn" t={t}>Connect failed</Badge>
+        <p className={cn("text-xs",t.textFaint)}>{mbInfo||"Unknown error."}</p>
+        <p className={cn("text-xs",t.textFaint)}>Most common cause: this app isn't hosted on the AA server (same-origin), or you're not logged into AA in this browser tab. From here, use <strong>Generate → Download SQL</strong> instead, or run the injection via the terminal commands below.</p>
       </div>}
       </div>
+      {mbStatus==="ok"&&<div className="flex items-center gap-3 mt-2">
+        <button onClick={doGrant} disabled={grantStatus==="granting"} className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold border transition",t.btnSecondary)} title="Metabase's ClickHouse user is read-only by default on a fresh AA install — this grants INSERT/TRUNCATE/ALTER DELETE/ALTER UPDATE plus SYSTEM RELOAD DICTIONARY/REFRESH VIEW so data injection AND dictionary/MV refresh both work">
+          {grantStatus==="granting"?"Granting...":"⚡ Grant DB Permissions (one-time per environment)"}</button>
+        {grantStatus==="ok"&&<Badge variant="success" t={t}>{grantMsg}</Badge>}
+        {grantStatus==="fail"&&<span className={cn("text-xs",t.danger)}>{grantMsg}</span>}
+      </div>}
+      {grantStatus==="fail"&&<div className="mt-2 space-y-1">
+        <p className={cn("text-xs",t.textFaint)}>Run this on the AA server instead:</p>
+        <div className={cn("rounded-lg p-2 font-mono text-[11px] break-all select-all cursor-pointer",t.codeBlock,t.textMuted)} onClick={()=>navigator.clipboard&&navigator.clipboard.writeText(grantCmd)}>{grantCmd}</div>
+      </div>}
     </Card>
 
     {/* AA26 API Authentication (v2.8.0-alpha) — for Configuration page population */}
@@ -3654,34 +4533,51 @@ kubectl rollout restart deployment/demo-manager -n default`}</pre>
         const sameOrigin = typeof window!=="undefined" && window.location.hostname === cfg.connection.aa26Host;
         return <>
         <div className="flex items-center justify-between mb-2">
-          <div className="flex items-center gap-2"><span className={cn("text-sm font-semibold",t.text)}>🔐 AA26 API Authentication</span>{sameOrigin?<Badge variant="success" t={t}>Auto Mode (Same-Origin)</Badge>:<Badge variant="danger" t={t}>Cross-Origin — Limited</Badge>}</div>
+          <div className="flex items-center gap-2"><span className={cn("text-sm font-semibold",t.text)}>🔐 AA API Authentication</span>{sameOrigin?<Badge variant="success" t={t}>Auto Mode (Same-Origin)</Badge>:<Badge variant="danger" t={t}>Cross-Origin — Limited</Badge>}</div>
           <span className={cn("text-xs",aa26SessStatus==="ok"?t.success:t.textFaint)}>{aa26SessStatus==="ok"?"✓ Verified":aa26SessStatus==="err"?"✗ Invalid":"Not verified"}</span>
         </div>
         {sameOrigin
-          ? <p className={cn("text-xs mb-2",t.textFaint)}>✨ <b className={t.success}>Same-origin mode active.</b> Sign in to AA26 in any tab on this browser, then click <b>Detect Session</b>. The browser auto-attaches cookies; no paste needed.</p>
+          ? <p className={cn("text-xs mb-2",t.textFaint)}>✨ <b className={t.success}>Same-origin mode active.</b> Sign in to AA in any tab on this browser, then click <b>Detect Session</b>. The browser auto-attaches cookies; no paste needed.</p>
           : <div className={cn("text-xs mb-2 p-2 rounded",t.warnBg||"bg-amber-500/10")}>
               <p className={cn("mb-1",t.warn)}><b>⚠ Browser security blocks cross-origin cookie auth.</b></p>
-              <p className={t.textMuted}>This app runs on <code>{typeof window!=="undefined"?window.location.hostname:""}</code> but AA26 API is on <code>{cfg.connection.aa26Host}</code>. Modern browsers prevent JavaScript from setting the <code>Cookie</code> header for security (RFC 6265 + Fetch spec). The manual paste below <b>only works if</b> AA26's API has CORS configured to allow this origin AND you're already signed in to AA26 in the same browser.</p>
-              <p className={cn("mt-1",t.textMuted)}><b>Recommended fix:</b> Host this app on the AA26 origin (<code>https://{cfg.connection.aa26Host}/demo-manager/</code>) for fully working auth.</p>
+              <p className={t.textMuted}>This app runs on <code>{typeof window!=="undefined"?window.location.hostname:""}</code> but AA API is on <code>{cfg.connection.aa26Host}</code>. Modern browsers prevent JavaScript from setting the <code>Cookie</code> header for security (RFC 6265 + Fetch spec). The manual paste below <b>only works if</b> AA's API has CORS configured to allow this origin AND you're already signed in to AA in the same browser.</p>
+              <p className={cn("mt-1",t.textMuted)}><b>Recommended fix:</b> Host this app on the AA origin (<code>https://{cfg.connection.aa26Host}/demo-manager/</code>) for fully working auth.</p>
             </div>
         }
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
-          <Input label="AA26 Host" value={cfg.connection.aa26Host} onChange={v=>u("aa26Host",v)} placeholder="appaa.cloud.lab" t={t}/>
+          <Input label="AA Host" value={cfg.connection.aa26Host} onChange={v=>u("aa26Host",v)} placeholder="appaa.cloud.lab" t={t}/>
           {!sameOrigin&&<Input label="Session Cookie (_dspm_session) — may be ignored by browser" value={cfg.connection.aa26SessionCookie} onChange={v=>u("aa26SessionCookie",v)} placeholder="optional: paste cookie value" type="password" t={t}/>}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={async()=>{
             setAa26SessStatus("checking");setAa26SessMsg("Verifying session...");
             const r=await aa26VerifySession(cfg);
-            if(r.ok){setAa26SessStatus("ok");setAa26SessMsg(`Signed in as ${r.user.email} (${r.user.role})`);}
+            if(r.ok){
+              setAa26SessStatus("ok");setAa26SessMsg(`Signed in as ${r.user.email} (${r.user.role})`);
+              // v3.2.0: discover the real Sensitive Data Patterns catalog now that we have a session —
+              // used by the Classification tab and the cifs/spo sensitive-data generators.
+              try{
+                const cat=await aa26DiscoverSensitiveDataCatalog(cfg);
+                setCfg(p=>({...p,_sdCatalog:cat}));
+                setAa26SessMsg(`Signed in as ${r.user.email} (${r.user.role}) — ${cat.groups.length} pattern groups, ${cat.patternCount} patterns discovered`);
+              }catch(e){ /* non-fatal — generator falls back to group-name-only matching */ }
+              // v3.2.0: detect the connected AA26 instance's real product version (source-types
+              // responses carry it) so a mismatch against AA26_SUPPORTED_VERSION can be surfaced
+              // before it causes confusing data-injection failures.
+              try{
+                const stRes=await aa26Fetch(cfg,"/api/v1/source-types");
+                const liveVer=stRes.ok && stRes.body?.data?.[0]?.version;
+                if(liveVer) setCfg(p=>({...p,connection:{...p.connection,aa26LiveVersion:liveVer}}));
+              }catch(e){ /* non-fatal — version badge just stays unknown */ }
+            }
             else{
               const hint = sameOrigin
-                ? " — try signing into AA26 in another tab first, then re-click."
-                : " — likely cause: browser blocked cross-origin cookies. Host this app on the AA26 origin.";
+                ? " — try signing into AA in another tab first, then re-click."
+                : " — likely cause: browser blocked cross-origin cookies. Host this app on the AA origin.";
               setAa26SessStatus("err");setAa26SessMsg(r.error+hint);
             }
           }} className={cn("text-xs px-3 py-1.5 rounded-lg",t.btnAccent)}>{sameOrigin?"Detect Session":"Try Verify (may fail cross-origin)"}</button>
-          <a href={`https://${cfg.connection.aa26Host}/`} target="_blank" rel="noopener" className={cn("text-xs underline",t.accent)}>Open AA26 sign-in →</a>
+          <a href={`https://${cfg.connection.aa26Host}/`} target="_blank" rel="noopener" className={cn("text-xs underline",t.accent)}>Open AA sign-in →</a>
           {aa26SessMsg&&<span className={cn("text-xs",aa26SessStatus==="ok"?t.success:aa26SessStatus==="err"?t.danger:t.textMuted)}>{aa26SessMsg}</span>}
         </div>
         <details className="mt-3">
@@ -3694,7 +4590,7 @@ kubectl rollout restart deployment/demo-manager -n default`}</pre>
               <li>Whether the request is going to that same origin</li>
               <li>Whether the request is cross-origin AND uses <code>credentials: 'include'</code> AND the target's CORS allows your origin with credentials</li>
             </ol>
-            <p><b>Solution:</b> Deploy this HTML file via nginx on the AA26 host. Example config:</p>
+            <p><b>Solution:</b> Deploy this HTML file via nginx on the AA host. Example config:</p>
             <pre className={cn("p-2 rounded",t.bgInput)}>{`location /demo-manager/ {
     alias /opt/demo-manager/;
     try_files $uri $uri/ /demo-manager.html;
@@ -3716,7 +4612,7 @@ kubectl rollout restart deployment/demo-manager -n default`}</pre>
             const schemas=await mbDiscoverAllSchemas(cfg);
             setCfg(p=>({...p,_schemas:schemas}));
             const found=Object.keys(schemas);
-            if(found.length===0){setSchemaStatus("warn");setSchemaMsg("No tables found — they may not exist yet in this AA26 build");}
+            if(found.length===0){setSchemaStatus("warn");setSchemaMsg("No tables found — they may not exist yet in this AA build");}
             else{setSchemaStatus("ok");setSchemaMsg(`Discovered: ${found.join(', ')} (${found.map(t=>schemas[t].length+' cols').join(', ')})`);}
           }catch(e){setSchemaStatus("fail");setSchemaMsg(e.message);}
         }} disabled={schemaStatus==="discovering"} className={cn("px-4 py-1.5 rounded-lg text-sm font-semibold transition",t.btnPrimary)}>
@@ -3772,7 +4668,7 @@ kubectl rollout restart deployment/demo-manager -n default`}</pre>
         </div>}
         {fullSchemaData.summary.unknownTables&&fullSchemaData.summary.unknownTables.length>0&&<div className="mb-2 mt-3 p-2 rounded border-2 border-amber-500/40 bg-amber-500/5">
           <div className={cn("text-[11px] font-semibold mb-1",t.warn)}>⚠ Unknown base tables ({fullSchemaData.summary.unknownTables.length}) — Demo Data Manager doesn't populate these</div>
-          <div className={cn("text-[10px] mb-1",t.textFaint)}>These are base tables (not views/MVs/dictionaries) that AA26 expects data in but our generator doesn't write to. Reports relying on these will be empty. Excludes derivative tables (_latest, _mv, etc.) which AA26 auto-populates from base data.</div>
+          <div className={cn("text-[10px] mb-1",t.textFaint)}>These are base tables (not views/MVs/dictionaries) that AA expects data in but our generator doesn't write to. Reports relying on these will be empty. Excludes derivative tables (_latest, _mv, etc.) which AA auto-populates from base data.</div>
           <div className="flex flex-wrap gap-1">
             {fullSchemaData.summary.unknownTables.map((n,i)=>{
               const tbl=fullSchemaData.tables.find(x=>x.name===n);
@@ -3830,7 +4726,7 @@ kubectl rollout restart deployment/demo-manager -n default`}</pre>
 
         <div className="space-y-1.5">
           <span className={cn("text-xs font-semibold uppercase tracking-wider",t.accent)}>Step 2: Grant permissions (one-time)</span>
-          <p className={cn("text-xs",t.textFaint)}>Metabase's ClickHouse user is read-only by default. This unlocks INSERT (data injection), TRUNCATE (wipe), ALTER DELETE (selective removal), and ALTER UPDATE (rehydration):</p>
+          <p className={cn("text-xs",t.textFaint)}>Metabase's ClickHouse user is read-only by default. This unlocks INSERT (data injection), TRUNCATE (wipe), ALTER DELETE (selective removal), ALTER UPDATE (rehydration), and SYSTEM RELOAD DICTIONARY / SYSTEM REFRESH VIEW (so Access/Content/Nested-Shares reports actually populate after inject):</p>
           <div className={cn("rounded-lg p-2.5 font-mono text-[11px] break-all select-all cursor-pointer",t.codeBlock,t.textMuted)} onClick={()=>navigator.clipboard&&navigator.clipboard.writeText(grantCmd)}>{grantCmd}</div>
         </div>
 
@@ -3838,7 +4734,7 @@ kubectl rollout restart deployment/demo-manager -n default`}</pre>
           <span className={cn("text-xs font-semibold uppercase tracking-wider",t.accent)}>Other useful credentials</span>
           <div className="grid grid-cols-3 gap-2">
             {[
-              ["AA26 Web Admin","administrator@cloud.lab","AD password"],
+              ["AA Web Admin","administrator@cloud.lab","AD password"],
               ["Bootstrap Admin","admin@dspm.local","Installer output"],
               ["Metabase API","api@metabase.local","MB_API_USER_PASSWORD env"],
             ].map(([role,user,src],i)=>(
@@ -3867,30 +4763,30 @@ kubectl rollout restart deployment/demo-manager -n default`}</pre>
     {/* v3.0 — Connection Health Check (moved to bottom) */}
     <Card t={t}>
       <details>
-        <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}>🩺 Connection Health Check <span className={cn("text-xs font-normal",t.textFaint)}>— Verify Metabase, AA26 API, and ClickHouse</span> {healthChecks&&<Badge variant={healthChecks.every(c=>c.status==="ok"||c.status==="info")?"success":"warn"} t={t}>{healthChecks.filter(c=>c.status==="ok").length}/{healthChecks.length} passing</Badge>}</summary>
+        <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}>🩺 Connection Health Check <span className={cn("text-xs font-normal",t.textFaint)}>— Verify Metabase, AA API, and ClickHouse</span> {healthChecks&&<Badge variant={healthChecks.every(c=>c.status==="ok"||c.status==="info")?"success":"warn"} t={t}>{healthChecks.filter(c=>c.status==="ok").length}/{healthChecks.length} passing</Badge>}</summary>
         <div className="mt-3 space-y-2">
-          <p className={cn("text-xs",t.textFaint)}>Run a pre-flight check to verify all connections are working before generating data or configuring AA26.</p>
+          <p className={cn("text-xs",t.textFaint)}>Run a pre-flight check to verify all connections are working before generating data or configuring AA.</p>
           <button onClick={async()=>{
             setHealthBusy(true);setHealthChecks([]);
             const checks=[];
             const sameOrigin = typeof window!=="undefined" && window.location.hostname===cfg.connection.aa26Host;
-            checks.push({label:"Same-Origin Deployment",status:sameOrigin?"ok":"warn",detail:sameOrigin?`Running on ${cfg.connection.aa26Host}`:"Cross-origin mode — auto-auth disabled. Deploy on AA26 server for full features."});
+            checks.push({label:"Same-Origin Deployment",status:sameOrigin?"ok":"warn",detail:sameOrigin?`Running on ${cfg.connection.aa26Host}`:"Cross-origin mode — auto-auth disabled. Deploy on AA server for full features."});
             setHealthChecks([...checks]);
             if(cfg.connection._mbSession){
               try{
-                const r=await fetch(`${cfg.connection.url}/metabase/api/user/current`,{headers:{"X-Metabase-Session":cfg.connection._mbSession}});
+                const r=await fetch(`${cfg.connection.url}/metabase/api/user/current`,{headers:{},credentials:"include"});
                 checks.push({label:"Metabase API",status:r.ok?"ok":"fail",detail:r.ok?"Session valid":`HTTP ${r.status}`});
               }catch(e){checks.push({label:"Metabase API",status:"fail",detail:e.message});}
             } else checks.push({label:"Metabase API",status:"fail",detail:"Not connected — click Connect on Metabase API Login above"});
             setHealthChecks([...checks]);
             try{
               const v=await aa26VerifySession(cfg);
-              checks.push({label:"AA26 REST API",status:v.ok?"ok":"warn",detail:v.ok?`Authenticated as ${v.user.email}`:v.error});
-            }catch(e){checks.push({label:"AA26 REST API",status:"fail",detail:e.message});}
+              checks.push({label:"AA REST API",status:v.ok?"ok":"warn",detail:v.ok?`Authenticated as ${v.user.email}`:v.error});
+            }catch(e){checks.push({label:"AA REST API",status:"fail",detail:e.message});}
             setHealthChecks([...checks]);
             if(cfg.connection._mbSession){
               try{
-                const r=await fetch(`${cfg.connection.url}/metabase/api/dataset`,{method:"POST",headers:{"Content-Type":"application/json","X-Metabase-Session":cfg.connection._mbSession},body:JSON.stringify({database:cfg.connection.databaseId||2,native:{query:"SELECT 1"},type:"native"})});
+                const r=await fetch(`${cfg.connection.url}/metabase/api/dataset`,{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({database:cfg.connection.databaseId||2,native:{query:"SELECT 1"},type:"native"})});
                 const d=await r.json();
                 const ok=d.status==="completed"||(d.data&&d.data.rows);
                 checks.push({label:"ClickHouse via Metabase",status:ok?"ok":"warn",detail:ok?"Query succeeded":"Could not run test query"});
@@ -3920,6 +4816,22 @@ kubectl rollout restart deployment/demo-manager -n default`}</pre>
 
 function StepOrg({cfg,setCfg,t,toast}){
   const u=(f,v)=>setCfg(p=>({...p,global:{...p.global,[f]:v}}));
+  const [showRegionEditor,setShowRegionEditor]=useState(false);
+  const [newDomain,setNewDomain]=useState("");
+  const [newDomainError,setNewDomainError]=useState("");
+  // v3.2.7: validate before adding — catches obvious typos/garbage and duplicates. Note this
+  // ONLY guards the email/UPN suffix list; it has zero connection to DN/SID/forest structure
+  // (those are hardwired to cfg.global.domainFqdn/sidBase and never read additionalDomains).
+  const DOMAIN_RE=/^([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
+  const addDomain=()=>{
+    const v=newDomain.trim().toLowerCase();
+    if(!v){setNewDomainError("Enter a domain first.");return;}
+    if(!DOMAIN_RE.test(v)){setNewDomainError(`"${v}" doesn't look like a valid domain (e.g. acme.io, test.acme.com).`);return;}
+    if(v===cfg.global.domainFqdn.toLowerCase()){setNewDomainError(`That's already the primary domain (${cfg.global.domainFqdn}).`);return;}
+    if((cfg.global.additionalDomains||[]).some(d=>d.toLowerCase()===v)){setNewDomainError(`"${v}" is already in the list.`);return;}
+    u("additionalDomains",[...(cfg.global.additionalDomains||[]),v]);
+    setNewDomain("");setNewDomainError("");
+  };
   const scans=Math.ceil((cfg.global.historyMonths*30)/cfg.global.scanFreqDays);
   // V2.6.8: vertical template selector — applies immediately on click
   const currentVertical = cfg.global?.vertical || 'generic';
@@ -3929,16 +4841,115 @@ function StepOrg({cfg,setCfg,t,toast}){
   return <div className="space-y-5">
     <SH n={2} title="🏢 Organization & Timeline" t={t}/>
 
+    {/* v3.1.0: Region/Locale picker — region drives names, domains, departments, regulations, company names */}
+    <Card t={t}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className={cn("text-base font-semibold",t.text)}>🌐 Region</span>
+          <HelpIcon text="Drives ALL regionalized data: user first/last names, email domain (TLD), department names, legal-entity suffix, company name (combined with Industry Vertical), and regional regulations added to sensitive-data taxonomies. Pick this BEFORE Industry Vertical." t={t}/>
+          <span className={cn("text-xs",t.textFaint)}>— pick this BEFORE Industry Vertical</span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button onClick={()=>setShowRegionEditor(true)} className={cn("text-xs px-2.5 py-1 rounded-lg border transition font-semibold",t.btnSecondary)} title="Edit the underlying name/office data this region uses">✏️ Edit Data</button>
+          <span className={cn("text-xs font-semibold",t.accent)}>
+            Active: 🌐 {getLocale(cfg).name}
+          </span>
+        </div>
+      </div>
+      <RegionDataDrawer open={showRegionEditor} onClose={()=>setShowRegionEditor(false)} cfg={cfg} setCfg={setCfg} t={t} toast={toast}/>
+      <p className={cn("text-xs mb-3",t.textFaint)}>
+        Selects the regional flavor for every generated artifact. The same Industry Vertical produces different company names, naming conventions, and regulatory frameworks based on the chosen region.
+      </p>
+      <div className="grid grid-cols-4 gap-2">
+        {LOCALE_KEYS.map(key => {
+          const loc = LOCALES[key];
+          const isActive = (cfg.global.locale||'us') === key;
+          return <button
+            key={key}
+            onClick={() => setCfg(prev => applyLocaleChange(prev, key))}
+            className={cn("p-2 rounded-lg border text-left transition", isActive ? cn(t.accentBg, t.borderAccent||t.border, "ring-2 ring-offset-1") : cn(t.bgInput, t.border, "hover:opacity-80"))}>
+            <div className="flex items-center gap-2">
+              <span className="text-base">🌐</span>
+              <span className={cn("text-xs font-semibold",t.text)}>{loc.name}</span>
+            </div>
+            <div className={cn("text-[10px] mt-1",t.textFaint)}>
+              .{loc.emailTlds.slice(0,3).join('/')}  •  {loc.legalSuffixes.slice(0,2).join('/')}
+            </div>
+          </button>;
+        })}
+      </div>
+
+      {/* Region Preview — shows what the chosen locale produces */}
+      <details className={cn("mt-3 rounded-lg",t.bgInput)}>
+        <summary className={cn("p-2 text-xs font-semibold cursor-pointer",t.text)}>
+          🔍 Region Preview — sample names, domain, company name for current vertical
+        </summary>
+        <div className="p-3 pt-1 space-y-2 text-xs">
+          {(() => {
+            const loc = getLocale(cfg);
+            const company = getCompanyName(cfg);
+            const sampleFirst = loc.firstNames.slice(0, 5).join(', ');
+            const sampleLast = loc.lastNames.slice(0, 5).join(', ');
+            const f0 = loc.firstNames[0], l0 = loc.lastNames[0];
+            const sampleSam = `${normalizeNamePart(f0).charAt(0)}${normalizeNamePart(l0)}`;
+            const sampleUpn = `${normalizeNamePart(f0)}.${normalizeNamePart(l0)}@${cfg.global.domainFqdn}`;
+            const samplePhone = `${loc.phonePrefix||'+1'}-${20+Math.floor(Math.random()*80)}-${100+Math.floor(Math.random()*900)}-${1000+Math.floor(Math.random()*9000)}`;
+            const sampleOffice = (loc.offices && loc.offices[0]) ? `${loc.offices[0][1]}, ${loc.offices[0][2]}, ${loc.offices[0][5]}` : '—';
+            return <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Company name (with current vertical "{cfg.global.vertical}")</div>
+                  <div className={cn("font-mono",t.accent)}>{company}</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Sample user — SAM + UPN/email</div>
+                  <div className={cn("font-mono",t.accent)}>{f0} {l0} → {sampleSam}</div>
+                  <div className={cn("font-mono",t.accent)}>{sampleUpn}</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Sample first names ({loc.firstNames.length} in pool)</div>
+                  <div className={t.textFaint}>{sampleFirst}…</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Sample last names ({loc.lastNames.length} in pool)</div>
+                  <div className={t.textFaint}>{sampleLast}…</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>HQ office (of {loc.offices?.length||0})</div>
+                  <div className={t.textFaint}>{sampleOffice}</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Sample phone number</div>
+                  <div className={cn("font-mono",t.textFaint)}>{samplePhone}</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Departments (localized labels)</div>
+                  <div className={t.textFaint}>{Object.values(loc.departments).slice(0,4).join(' • ')}…</div>
+                </div>
+                <div>
+                  <div className={cn("font-semibold mb-1",t.textMuted)}>Regional regulations added</div>
+                  <div className={t.textFaint}>{loc.extraRegulations.length ? loc.extraRegulations.join(', ') : '(none — US is the global baseline)'}</div>
+                </div>
+              </div>
+              <div className={cn("text-[10px] italic pt-1 border-t",t.textFaint,t.border)}>
+                ℹ v3.1.0: regional names, offices, phone formats, domain, SPO/FS hostnames, and regulatory taxonomies are fully wired into AD/Entra user generation. Wipe DB + re-inject after region change to see new data.
+              </div>
+            </>;
+          })()}
+        </div>
+      </details>
+    </Card>
+
     {/* V2.6.8: Industry Vertical Selector — sets demo-wide tone */}
     <Card t={t}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <span className={cn("text-base font-semibold",t.text)}>🎯 Industry Vertical</span>
-          <HelpIcon text="Sets the FLAVOR of demo data — departments, file share names, SharePoint sites, OneDrive users, sensitive-data taxonomies, and file naming patterns. Pick this FIRST, then pick a Demo Profile below for SCALE." t={t}/>
-          <span className={cn("text-xs",t.textFaint)}>— pick this FIRST</span>
+          <HelpIcon text="Sets the FLAVOR of demo data — departments, file share names, SharePoint sites, OneDrive users, sensitive-data taxonomies, and file naming patterns. Pick a Region FIRST, then pick this for the industry, then pick a Demo Profile below for SCALE." t={t}/>
+          <span className={cn("text-xs",t.textFaint)}>— pick this AFTER region</span>
         </div>
         <span className={cn("text-xs font-semibold",t.accent)}>
-          Active: {VERTICAL_TEMPLATES[currentVertical].icon} {VERTICAL_TEMPLATES[currentVertical].label}
+          Active: {VERTICAL_TEMPLATES[currentVertical].icon} {VERTICAL_TEMPLATES[currentVertical].label} → {getCompanyName(cfg)}
         </span>
       </div>
       <p className={cn("text-xs mb-3",t.textFaint)}>
@@ -3968,17 +4979,15 @@ function StepOrg({cfg,setCfg,t,toast}){
           );
         })}
       </div>
-      {currentVertical !== 'generic' && (
-        <div className={cn("mt-3 p-2.5 rounded text-xs space-y-1",t.accentBg)}>
-          <div className={t.text}><b>Domain:</b> {cfg.global.domainName} ({cfg.global.domainFqdn})</div>
-          <div className={t.text}>
-            <b>Departments:</b> {cfg.ad.departments.length}
-            &nbsp;|&nbsp; <b>Shares:</b> {cfg.fs.hosts.reduce((s,h)=>s+h.shares.length,0)}
-            &nbsp;|&nbsp; <b>SPO sites:</b> {cfg.spo.tenants.reduce((s,t)=>s+t.sites.length,0)}
-          </div>
-          <div className={t.text}><b>Enabled taxonomies:</b> {cfg.sd.taxonomies.filter(tx=>tx.enabled).map(tx=>tx.name).join(', ')}</div>
+      <div className={cn("mt-3 p-2.5 rounded text-xs space-y-1",t.accentBg)}>
+        <div className={t.text}><b>Domain:</b> {cfg.global.domainName} ({cfg.global.domainFqdn})</div>
+        <div className={t.text}>
+          <b>Departments:</b> {cfg.ad.departments.length}
+          &nbsp;|&nbsp; <b>Shares:</b> {cfg.fs.hosts.reduce((s,h)=>s+h.shares.length,0)}
+          &nbsp;|&nbsp; <b>SPO sites:</b> {cfg.spo.tenants.reduce((s,t)=>s+t.sites.length,0)}
         </div>
-      )}
+        <div className={t.text}><b>Enabled pattern groups:</b> {(cfg.sd.enabledGroups||[]).join(', ') || '(none)'}</div>
+      </div>
     </Card>
 
     {/* v3.0 — Demo Profile Templates (scale presets that complement Industry Vertical) */}
@@ -4013,7 +5022,7 @@ function StepOrg({cfg,setCfg,t,toast}){
               {p.longInject && <span className={cn("text-[10px] px-1.5 py-0.5 rounded",t.warnBg,t.warn)}>SLOW INJECT</span>}
             </div>
             <div className={cn("text-xs leading-snug",t.textFaint)}>{p.description}</div>
-            {p.longInject && <div className={cn("text-[10px] mt-1.5 italic",t.warn)}>⚠ Heads up: injection at this scale can take 10–30 minutes depending on AA26 hardware.</div>}
+            {p.longInject && <div className={cn("text-[10px] mt-1.5 italic",t.warn)}>⚠ Heads up: injection at this scale can take 10–30 minutes depending on AA hardware.</div>}
           </button>;
         })}
       </div>
@@ -4021,81 +5030,38 @@ function StepOrg({cfg,setCfg,t,toast}){
 
     <Card t={t}>
       <div className="grid grid-cols-2 gap-4">
-        <Input label="Organization Name" value={cfg.global.domainName} onChange={v=>u("domainName",v)} help="Display name used throughout the demo (e.g., ACME). Appears in source names, file paths, and SharePoint URLs." t={t}/>
+        <Input label="Organization Name" value={cfg.global.domainName} onChange={v=>{
+          setCfg(p=>{
+            const oldFqdn = p.global.domainFqdn || '';
+            const firstDot = oldFqdn.indexOf('.');
+            const tld = firstDot >= 0 ? oldFqdn.substring(firstDot + 1) : 'local';
+            const newPrefix = (v||'').toLowerCase().replace(/[^a-z0-9-]/g, '');
+            return {...p, global:{...p.global, domainName: v, domainFqdn: newPrefix ? `${newPrefix}.${tld}` : p.global.domainFqdn}};
+          });
+        }} help="Display name used throughout the demo (e.g., ACME). Appears in source names, file paths, and SharePoint URLs. Editing this auto-updates Domain FQDN prefix below (TLD preserved)." t={t}/>
         <Input label="Domain FQDN" value={cfg.global.domainFqdn} onChange={v=>u("domainFqdn",v)} help="Fully-qualified domain name for Active Directory (e.g., acme.local). Used in user UPNs and group DNs." t={t}/>
         <Input label="Entra Tenant ID" value={cfg.global.tenantId} onChange={v=>u("tenantId",v)} help="Azure AD / Entra ID tenant identifier (GUID format). Demo value works for visualization — real lab uses real tenant ID." t={t}/>
         <Input label="SID Base" value={cfg.global.sidBase} onChange={v=>u("sidBase",v)} help="Active Directory Security Identifier prefix. All generated users/groups use this base. Advanced setting — change only if matching specific demo scenarios." t={t}/>
         <Input label="History Depth" value={cfg.global.historyMonths} onChange={v=>u("historyMonths",v)} type="number" min={1} max={24} suffix="months" help="How far back to simulate scan history and activity events. Longer history = more data points in trend charts but slower generation." t={t}/>
         <Input label="Scan Frequency" value={cfg.global.scanFreqDays} onChange={v=>u("scanFreqDays",v)} type="number" min={1} max={30} suffix="days" help="How often scans recur (e.g., 14 = bi-weekly). Combined with History Depth, this determines total scan count." t={t}/>
       </div>
+      {/* v3.2.6: Additional accepted email/UPN domains — real orgs often accept logins across
+          several domains even under one AD forest. Primary domain stays dominant in generation. */}
       <div className="mt-3">
-        <label className={cn("text-xs font-medium block mb-1",t.textFaint)}>📈 Rich Activity Timeline</label>
-        <select value={cfg.global.richActivityTimeline||0} onChange={e=>u("richActivityTimeline",parseInt(e.target.value))}
-          className={cn("text-sm rounded-lg px-3 py-1.5 border w-full",t.bgInput,t.border,t.text)}>
-          <option value={0}>None — recent activity only</option>
-          <option value={1500}>+1,500 events (~2-3 min extra injection)</option>
-          <option value={3000}>+3,000 events (~4-6 min extra injection)</option>
-          <option value={4500}>+4,500 events (~6-9 min extra injection)</option>
-          <option value={6000}>+6,000 events (~8-12 min extra injection)</option>
-          <option value={7500}>+7,500 events (~10-15 min extra injection)</option>
-        </select>
-        {cfg.global.richActivityTimeline>0&&<p className={cn("text-xs mt-1",t.warn)}>Adds ~{cfg.global.richActivityTimeline.toLocaleString()} historical events spread across 6 months with burst weeks for realistic timeline charts.</p>}
-      </div>
-      {/* v3.0 — Activity Patterns by Time */}
-      <div className="mt-4">
-        <details>
-          <summary className={cn("text-xs font-semibold cursor-pointer select-none flex items-center gap-2",t.text)}>
-            ⏰ Activity Patterns by Time
-            <HelpIcon text="Make activity events follow realistic business-hour patterns instead of uniform 24/7 distribution. Affects Rich Activity Timeline events (FS and SharePoint)." t={t}/>
-            {cfg.global.activityPattern?.enabled && <Badge variant="success" t={t}>ENABLED</Badge>}
-          </summary>
-          <div className={cn("mt-3 p-3 rounded-lg border space-y-3",t.bgInput,t.border)}>
-            <div className="flex items-center gap-2">
-              <Toggle checked={cfg.global.activityPattern?.enabled||false} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,enabled:v})} label="Enable realistic business-hour patterns" t={t}/>
-              <HelpIcon text="When OFF: events distributed uniformly 24/7 (synthetic-looking). When ON: events concentrate during business hours with realistic peaks and dips." t={t}/>
-            </div>
-            <div className={cfg.global.activityPattern?.enabled?"":"opacity-50 pointer-events-none"}>
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <Input label="Work Day Start" value={cfg.global.activityPattern?.workStart||9} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,workStart:Math.max(0,Math.min(23,v))})} type="number" min={0} max={23} suffix="hr (0-23)" help="Hour when business day starts. Default 9 = 9 AM. For 24/7 ops use 0." t={t}/>
-                <Input label="Work Day End" value={cfg.global.activityPattern?.workEnd||17} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,workEnd:Math.max(1,Math.min(24,v))})} type="number" min={1} max={24} suffix="hr (1-24)" help="Hour when business day ends. Default 17 = 5 PM. For extended hours try 19 (7 PM)." t={t}/>
-              </div>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Toggle checked={cfg.global.activityPattern?.lunchDip!==false} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,lunchDip:v})} label="🥗 Lunch Dip (reduce activity around noon)" t={t}/>
-                  <HelpIcon text="Adds a noticeable dip in activity around 12 PM — characteristic of real environments where people step away for lunch." t={t}/>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Toggle checked={cfg.global.activityPattern?.nightActivity||false} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,nightActivity:v})} label="🌙 Evenings/Nights activity (off-hours admins, late workers)" t={t}/>
-                  <HelpIcon text="ON = ~15% of events occur outside work hours (service accounts, on-call work, late nights). OFF = all events stay within work hours." t={t}/>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Toggle checked={cfg.global.activityPattern?.weekendActivity||false} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,weekendActivity:v})} label="📅 Weekend activity (Saturday/Sunday)" t={t}/>
-                  <HelpIcon text="ON = sparse activity on weekends (admin work, on-call). OFF = no weekend events at all — typical of standard office environments." t={t}/>
-                </div>
-              </div>
-              <div className={cn("mt-2 p-2 rounded text-[10px]",t.bgCard,t.textFaint)}>
-                💡 <b>Preview:</b> Activity will concentrate {cfg.global.activityPattern?.workStart||9}:00–{cfg.global.activityPattern?.workEnd||17}:00 weekdays
-                {cfg.global.activityPattern?.lunchDip!==false && ", with a dip around noon"}
-                {cfg.global.activityPattern?.nightActivity && ", plus ~15% off-hours events"}
-                {cfg.global.activityPattern?.weekendActivity ? ", and sparse weekend events" : ", weekends excluded"}.
-              </div>
-            </div>
-          </div>
-        </details>
-      </div>
-      <div className={cn("mt-4 px-3 py-2 rounded-lg border",t.accentBg,t.accentBorder)}>
-        <span className={cn("text-xs",t.textMuted)}>Timeline: </span><span className={cn("text-xs font-semibold",t.accent)}>{scans} scans</span>
-        <span className={cn("text-xs",t.textFaint)}> over {cfg.global.historyMonths}mo (every {cfg.global.scanFreqDays}d)</span>
-      </div>
-      <div className={cn("mt-2 px-3 py-2.5 rounded-lg text-xs space-y-1",t.bgInput)}>
-        <div className={cn("font-semibold",t.textMuted)}>📊 How this affects speed & volume</div>
-        <div className={t.textFaint}>Every file, user, and permission is multiplied by the scan count ({scans}×). More history or higher frequency = more scans = larger datasets and slower generation.</div>
-        <div className={t.textFaint}>
-          <strong className={t.textMuted}>Fast demo (recommended):</strong> 3 months, every 14 days = ~7 scans. Generates in seconds, injects in 1-2 min.
+        <label className={cn("text-xs font-medium block mb-1",t.textFaint)}>🌐 Additional Domains <span className={cn("font-normal",t.textFaint)}>(optional — mixed into generated emails/UPNs alongside {cfg.global.domainFqdn})</span></label>
+        <div className={cn("flex flex-wrap gap-1 p-2 rounded-lg border mb-2",t.bgInput,t.border)}>
+          {(cfg.global.additionalDomains||[]).map((d,i)=>
+            <span key={i} className={cn("text-[11px] rounded px-2 py-0.5 flex items-center gap-1",t.bgCard,t.border,"border")}>{d}
+              <button onClick={()=>u("additionalDomains",cfg.global.additionalDomains.filter((_,di)=>di!==i))} className="text-red-400 font-bold" title="Remove">✕</button>
+            </span>
+          )}
+          {(!cfg.global.additionalDomains||cfg.global.additionalDomains.length===0)&&<span className={cn("text-[11px]",t.textFaint)}>None — using {cfg.global.domainFqdn} for all users</span>}
         </div>
-        <div className={t.textFaint}>
-          <strong className={t.textMuted}>Rich history:</strong> 6 months, every 7 days = ~26 scans. 4× more data. Use "Server Inject Script" for datasets over 50K rows.
+        <div className="flex gap-2">
+          <input value={newDomain} onChange={e=>{setNewDomain(e.target.value);setNewDomainError("");}} placeholder="e.g. acme.io" onKeyDown={e=>{if(e.key==='Enter')addDomain();}} className={cn("flex-1 text-xs rounded-lg px-2 py-1.5 border",t.bgInput,newDomainError?"border-red-500":t.border,t.text)}/>
+          <button onClick={addDomain} className={cn("text-xs px-3 py-1.5 rounded-lg border transition font-semibold",t.btnSecondary)}>+ Add Domain</button>
         </div>
+        {newDomainError&&<p className={cn("text-[11px] mt-1",t.danger)}>{newDomainError}</p>}
       </div>
     </Card>
   </div>;
@@ -4246,48 +5212,158 @@ function StepDataSources({cfg,setCfg,t}){
 }
 
 function StepSensitiveData({cfg,setCfg,t}){
-  const toggleTax=(i)=>setCfg(p=>{const tx=[...p.sd.taxonomies];tx[i]={...tx[i],enabled:!tx[i].enabled};return{...p,sd:{...p.sd,taxonomies:tx}};});
-  const removeTax=(i)=>setCfg(p=>({...p,sd:{...p.sd,taxonomies:p.sd.taxonomies.filter((_,idx)=>idx!==i)}}));
-  const [newTax,setNewTax]=useState({name:"",region:"Global",terms:""});
-  const addTax=()=>{if(!newTax.name||!newTax.terms)return;setCfg(p=>({...p,sd:{...p.sd,taxonomies:[...p.sd.taxonomies,{name:newTax.name,region:newTax.region,terms:newTax.terms.split(",").map(t=>t.trim()).filter(Boolean),enabled:true}]}}));setNewTax({name:"",region:"Global",terms:""});};
-  const enabledCount=cfg.sd.taxonomies.filter(x=>x.enabled).length;
-  const totalTerms=cfg.sd.taxonomies.filter(x=>x.enabled).reduce((s,x)=>s+x.terms.length,0);
-  const regionColors={US:"accent",EU:"success","US-CA":"warn",Global:"accent",CA:"danger",BR:"warn"};
+  // v3.2.0: "Taxonomies" renamed to match AA26's own terminology — "Sensitive Data Patterns",
+  // organized as Pattern Groups containing individual Patterns. The list of groups/patterns
+  // itself is now discovered LIVE from AA26 (via GraphQL, see aa26DiscoverSensitiveDataCatalog)
+  // instead of a hardcoded fictional list, so generated data always matches what a user would
+  // actually see on AA26's own Sensitive Data Patterns page. Falls back to the 11 known built-in
+  // group names (confirmed live against AA26 v1.1.5) until a session connects and discovers
+  // the real catalog — which also picks up any custom groups the user has added in AA26 itself.
+  const catalog=cfg._sdCatalog;
+  const FALLBACK_GROUPS=["CCPA","CMMC","Credentials","Financial Records","GDPR","GDPR Restricted","GLBA","HIPAA","PCI DSS","PHI","PII"];
+  const allGroups=catalog?.groups?.length?catalog.groups:FALLBACK_GROUPS;
+  const enabledGroups=cfg.sd.enabledGroups||[];
+  const toggleGroup=(name)=>setCfg(p=>{
+    const cur=p.sd.enabledGroups||[];
+    const next=cur.includes(name)?cur.filter(g=>g!==name):[...cur,name];
+    return {...p,sd:{...p.sd,enabledGroups:next}};
+  });
+  const enabledCount=allGroups.filter(g=>enabledGroups.includes(g)).length;
+  const totalPatterns=catalog?.patternCount;
   return <div className="space-y-5">
     <SH n={5} title="🔒 Sensitive Data & Classification" t={t}/>
     <Card t={t}>
-      <div className="flex items-center gap-2 mb-4">
-        <span className={cn("text-base font-semibold",t.text)}>🏷️ Taxonomies</span>
-        <Badge t={t}>{enabledCount} active, {totalTerms} terms</Badge>
+      <div className="flex items-center gap-2 mb-2">
+        <span className={cn("text-base font-semibold",t.text)}>🏷️ Sensitive Data Patterns</span>
+        <Badge t={t}>{enabledCount}/{allGroups.length} groups active{totalPatterns?`, ${totalPatterns} patterns discovered`:''}</Badge>
+        {!catalog&&<Badge variant="warn" t={t}>Not yet discovered — click Detect Session on the Connection tab</Badge>}
       </div>
+      <p className={cn("text-xs mb-3",t.textFaint)}>
+        These are AA's real Pattern Groups (Configuration → Sensitive data patterns), discovered live from this instance — not a separate list we maintain. Toggle which groups this demo run should emphasize; the actual pattern names used come straight from AA's catalog. To add a new group or pattern, do it in AA itself (Configuration → Sensitive data patterns → New/Create Pattern) — it'll show up here automatically next time you connect.
+      </p>
       <div className="grid grid-cols-2 gap-3">
-        {cfg.sd.taxonomies.map((tx,i)=>(
-          <div key={i} className={cn("border rounded-lg p-3 transition",tx.enabled?t.border:t.border+" opacity-50")}>
+        {allGroups.map((name,i)=>{
+          const on=enabledGroups.includes(name);
+          const samplePatterns=catalog?.byGroup?.[name]?.slice(0,6).map(p=>p.name)||[];
+          return <div key={i} className={cn("border rounded-lg p-3 transition cursor-pointer",on?t.border:t.border+" opacity-50")} onClick={()=>toggleGroup(name)}>
             <div className="flex items-center justify-between mb-1.5">
-              <div className="flex items-center gap-2 cursor-pointer" onClick={()=>toggleTax(i)}>
-                <span className={cn("text-sm font-semibold",t.text)}>{tx.name}</span>
-                <Badge variant={regionColors[tx.region]||"accent"} t={t}>{tx.region}</Badge>
-              </div>
-              <div className="flex items-center gap-1.5">
-                <div onClick={()=>toggleTax(i)} className={cn("w-4 h-4 rounded border flex items-center justify-center text-[10px] cursor-pointer",tx.enabled?"bg-purple-500 border-purple-500 text-white":"border-slate-500")}>
-                  {tx.enabled&&"✓"}
-                </div>
-                <button onClick={(ev)=>{ev.stopPropagation();removeTax(i);}} className={cn("text-xs",t.textFaint,"hover:text-red-400")}>✕</button>
-              </div>
+              <span className={cn("text-sm font-semibold",t.text)}>{name}</span>
+              <div className={cn("w-4 h-4 rounded border flex items-center justify-center text-[10px]",on?"bg-purple-500 border-purple-500 text-white":"border-slate-500")}>{on&&"✓"}</div>
             </div>
-            <div className="flex flex-wrap gap-1">{tx.terms.map((term,j)=>
+            <div className="flex flex-wrap gap-1">{samplePatterns.length?samplePatterns.map((term,j)=>
               <span key={j} className={cn("text-[10px] rounded px-1.5 py-0.5",t.bgInput,t.textMuted)}>{term}</span>
-            )}</div>
-          </div>
-        ))}
+            ):<span className={cn("text-[10px]",t.textFaint)}>Connect AA to see real pattern names</span>}</div>
+          </div>;
+        })}
       </div>
     </Card>
-    <Card className="opacity-50" t={t}>
-      <div className="flex items-center gap-2 mb-3">
-        <span className={cn("text-sm font-semibold",t.text)}>🏷️ Custom taxonomies</span>
-        <Badge variant="warn" t={t}>Coming Soon</Badge>
-        <span className={cn("text-xs",t.textFaint)}>AA26 does not currently support custom taxonomy creation — only built-in categories above</span>
+
+    {/* v3.0.1: MIP Labels — Microsoft Information Protection label mappings */}
+    <Card t={t}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className={cn("text-base font-semibold",t.text)}>🛡️ MIP Labels (Microsoft Information Protection)</span>
+          <HelpIcon text="MIP labels assign a sensitivity classification (Public / Internal / Confidential / Highly Confidential) to each AA data type. Real AA deployments pull these from a connected Entra tenant via Microsoft Graph. This tool injects synthetic labels for the demo and wires up the mappings via PUT /api/v1/sensitive-data-config." t={t}/>
+        </div>
+        <Toggle checked={cfg.sd.mipLabels?.enabled||false} onChange={v=>setCfg(p=>({...p,sd:{...p.sd,mipLabels:{...p.sd.mipLabels,enabled:v}}}))} label="Enable MIP Labels" t={t}/>
       </div>
+      <p className={cn("text-xs mb-3",t.textFaint)}>
+        Defines synthetic MIP labels that will be inserted into AA's <code className={cn("px-1 rounded",t.codeBlock)}>mip_labels</code> table and linked to data types on the Sensitive Data Configuration page. The Entra demo source must be created (Step 5 → AA Config) for these labels to associate correctly.
+      </p>
+
+      {cfg.sd.mipLabels?.enabled && <>
+        {/* Label definitions */}
+        <div className="mb-4">
+          <div className={cn("text-xs font-semibold mb-2",t.text)}>Sensitivity Labels (4 defaults)</div>
+          <div className="grid grid-cols-2 gap-2">
+            {(cfg.sd.mipLabels?.labels||[]).map((lab,i)=><div key={lab.id} className={cn("border rounded-lg p-3 flex items-start gap-2",t.border,t.bgInput)}>
+              <div className="w-3 h-3 rounded-full mt-1 flex-shrink-0" style={{background:lab.color}}/>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <input
+                    type="text"
+                    value={lab.name}
+                    onChange={e=>{
+                      const labels=[...cfg.sd.mipLabels.labels];
+                      labels[i]={...labels[i],name:e.target.value};
+                      setCfg(p=>({...p,sd:{...p.sd,mipLabels:{...p.sd.mipLabels,labels}}}));
+                    }}
+                    className={cn("text-sm font-semibold rounded px-2 py-0.5 border w-full",t.bgCard,t.borderInput,t.text)}/>
+                  <Badge t={t}>P{lab.priority}</Badge>
+                </div>
+                <textarea
+                  value={lab.description}
+                  onChange={e=>{
+                    const labels=[...cfg.sd.mipLabels.labels];
+                    labels[i]={...labels[i],description:e.target.value};
+                    setCfg(p=>({...p,sd:{...p.sd,mipLabels:{...p.sd.mipLabels,labels}}}));
+                  }}
+                  rows={2}
+                  className={cn("text-xs rounded px-2 py-1 border w-full mt-1",t.bgCard,t.borderInput,t.textMuted)}/>
+              </div>
+            </div>)}
+          </div>
+        </div>
+
+        {/* Data type → MIP label mappings */}
+        <div>
+          <div className={cn("text-xs font-semibold mb-2 flex items-center gap-2",t.text)}>
+            Data Type → Label Mappings
+            <HelpIcon text="AA has 11 built-in data types. Each can be assigned to one of the MIP labels above. Defaults follow industry-standard sensitivity (e.g., HIPAA + PCI DSS → Highly Confidential)." t={t}/>
+          </div>
+          <div className={cn("rounded-lg border overflow-hidden",t.border)}>
+            <table className="w-full text-xs">
+              <thead className={t.bgInput}>
+                <tr>
+                  <th className={cn("text-left px-3 py-2",t.textFaint)}>Data Type</th>
+                  <th className={cn("text-left px-3 py-2",t.textFaint)}>Description</th>
+                  <th className={cn("text-left px-3 py-2",t.textFaint)}>MIP Label</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[
+                  ['ccpa','CCPA','California Consumer Privacy Act'],
+                  ['cmmc','CMMC','Cybersecurity Maturity Model Certification'],
+                  ['credentials','Credentials','Passwords, API keys, tokens'],
+                  ['financial_records','Financial Records','Banking and financial data'],
+                  ['gdpr','GDPR','General Data Protection Regulation'],
+                  ['gdpr_restricted','GDPR Restricted','Highly sensitive GDPR data'],
+                  ['glba','GLBA','Gramm-Leach-Bliley Act'],
+                  ['hipaa','HIPAA','Health Insurance Portability Act'],
+                  ['pci_dss','PCI DSS','Payment Card Industry'],
+                  ['phi','PHI','Protected Health Information'],
+                  ['pii','PII','Personally Identifiable Information']
+                ].map(([id,name,desc])=>{
+                  const currentLabel = cfg.sd.mipLabels?.mappings?.[id] || '';
+                  const labelObj = (cfg.sd.mipLabels?.labels||[]).find(l=>l.id===currentLabel);
+                  return <tr key={id} className={cn("border-t",t.border)}>
+                    <td className={cn("px-3 py-2 font-semibold",t.text)}>{name}</td>
+                    <td className={cn("px-3 py-2",t.textFaint)}>{desc}</td>
+                    <td className={cn("px-3 py-2")}>
+                      <div className="flex items-center gap-2">
+                        {labelObj && <div className="w-2 h-2 rounded-full flex-shrink-0" style={{background:labelObj.color}}/>}
+                        <select
+                          value={currentLabel}
+                          onChange={e=>{
+                            const mappings={...(cfg.sd.mipLabels?.mappings||{}),[id]:e.target.value};
+                            setCfg(p=>({...p,sd:{...p.sd,mipLabels:{...p.sd.mipLabels,mappings}}}));
+                          }}
+                          className={cn("text-xs rounded px-2 py-1 border",t.bgCard,t.borderInput,t.text)}>
+                          <option value="">— No Label —</option>
+                          {(cfg.sd.mipLabels?.labels||[]).map(l=><option key={l.id} value={l.id}>{l.name}</option>)}
+                        </select>
+                      </div>
+                    </td>
+                  </tr>;
+                })}
+              </tbody>
+            </table>
+          </div>
+          <div className={cn("text-[10px] mt-2 italic",t.textFaint)}>
+            ℹ Mappings apply after running "Step 5 → Run AA Config" + the Phase 5 Post-Setup SQL. The orchestrator inserts synthetic labels into Postgres and PUTs the sensitive-data-config to wire up the mappings.
+          </div>
+        </div>
+      </>}
     </Card>
   </div>;
 }
@@ -4298,13 +5374,14 @@ function LogDownloadBtn({logs,filename,t}){
 }
 
 function StepGenerate({cfg,setCfg,onGenerate,results,progress,generating,t,injecting,injectLogs,injectResult,cancelFlag,injectFilterRef,skipWipeRef,onInject,runHistory,setRunHistory,stopping,setStopping,setInjectLogs,toast}){
+  const u=(f,v)=>setCfg(p=>({...p,global:{...p.global,[f]:v}}));
+  // v3.2.4: Step 0 Wipe Data is opt-in — collapsed/grayed by default so it's not an easy
+  // accidental click on a destructive action.
+  const [wipeEnabled,setWipeEnabled]=useState(false);
   const [wipeConfirm,setWipeConfirm]=useState(false);
   const [wiping,setWiping]=useState(false);
   const [wipeResult,setWipeResult]=useState(null);
   const [wipeLogs,setWipeLogs]=useState([]);
-  // V2.6.10: Run history pagination (10 per page)
-  const [historyPage,setHistoryPage]=useState(0);
-  const HISTORY_PER_PAGE = 10;
   // Selective inject state
   const allTables=[...new Set(Object.values(results||{}).filter(v=>v.table).map(v=>v.table))];
   const [selectedTables,setSelectedTables]=useState(()=>new Set(allTables));
@@ -4317,7 +5394,7 @@ function StepGenerate({cfg,setCfg,onGenerate,results,progress,generating,t,injec
     return ()=>window.removeEventListener("beforeunload",handler);
   },[wiping]);
 
-  const WIPE_TABLES=["cifs_object","cifs_permission","cifs_share_permission","cifs_sensitive_data","sharepoint_online_objects","sharepoint_online_permissions","sharepoint_online_shared_links","sharepoint_sensitive_data","netwrix_activity_monitor_json","netwrix_activity_monitor_spo","netwrix_activity_monitor_copilot","netwrix_activity_monitor_leef","classifications","active_directory_user","active_directory_group","active_directory_group_membership","active_directory_risk_catalog","active_directory_effective_group_membership","localgroups_group","localgroups_group_members","localgroups_effective_group_membership","localgroups_user","crawl_completions"];
+  const WIPE_TABLES=["cifs_object","cifs_permission","cifs_share_permission","cifs_sensitive_data","sharepoint_online_objects","sharepoint_online_permissions","sharepoint_online_shared_links","sharepoint_sensitive_data","netwrix_activity_monitor_json","netwrix_activity_monitor_spo","netwrix_activity_monitor_copilot","netwrix_activity_monitor_ad","netwrix_activity_monitor_entra","netwrix_activity_monitor_leef","classifications","active_directory_user","active_directory_group","active_directory_group_membership","active_directory_risk_catalog","active_directory_effective_group_membership","localgroups_group","localgroups_group_members","localgroups_effective_group_membership","localgroups_user","crawl_completions"];
   // v2 entity-model tables — populated by real AA26 scans, preserved by default. Wiped only when "Full Reset" is selected.
   const WIPE_V2_TABLES=["entities","principals","permissions","memberships","system_objects","ownerships","permission_sets","permission_grant_rules","sensitive_data"];
   const [preserveV2,setPreserveV2]=useState(true);
@@ -4330,6 +5407,10 @@ function StepGenerate({cfg,setCfg,onGenerate,results,progress,generating,t,injec
   const [showWipeModal,setShowWipeModal]=useState(false); // For ClickHouse wipe
   const [showFullResetModal,setShowFullResetModal]=useState(false);
   const [aa26PostSetupCmd,setAa26PostSetupCmd]=useState(null);
+  // v3.0.8: Phase 5 SQL application verification
+  const [phase5PendingIds,setPhase5PendingIds]=useState([]); // execution IDs that should have totalObjects>0 after SQL runs
+  const [phase5Status,setPhase5Status]=useState(null); // null | 'pending' | 'verifying' | 'applied' | 'partial'
+  const [phase5VerifyDetails,setPhase5VerifyDetails]=useState(null); // {applied:N, total:N, sample:[...]}
   const [aa26WipeBusy,setAa26WipeBusy]=useState(false);
   const [aa26WipeLog,setAa26WipeLog]=useState([]);
   const [aa26WipeConfirm,setAa26WipeConfirm]=useState(false);
@@ -4365,12 +5446,12 @@ function StepGenerate({cfg,setCfg,onGenerate,results,progress,generating,t,injec
       let cacheCleared=false;
       for(const ep of endpoints){
         try{
-          const r=await fetch(cfg.connection.url+ep,{method:"POST",headers:{"Content-Type":"application/json","X-Metabase-Session":cfg.connection._mbSession},body:JSON.stringify({})});
+          const r=await fetch(cfg.connection.url+ep,{method:"POST",headers:{"Content-Type":"application/json"},credentials:"include",body:JSON.stringify({})});
           if(r.ok||r.status===204){onP("Metabase cache cleared — refresh dashboards to see updated data");cacheCleared=true;break;}
         }catch(e){}
       }
-      if(!cacheCleared){onP("Metabase cache could not be auto-cleared — click the refresh button on each AA26 dashboard");}
-    }catch(e){onP("Refresh each AA26 dashboard manually to see the wiped state");}
+      if(!cacheCleared){onP("Metabase cache could not be auto-cleared — click the refresh button on each AA dashboard");}
+    }catch(e){onP("Refresh each AA dashboard manually to see the wiped state");}
     setWipeResult({ok,fail});setWiping(false);setWipeConfirm(false);
     setRunHistory(prev=>[{type:"wipe",time:new Date().toLocaleString(),rows:0,tables:ok,errors:fail,logs:[...logs]},...prev.slice(0,19)]);
   };
@@ -4379,19 +5460,19 @@ function StepGenerate({cfg,setCfg,onGenerate,results,progress,generating,t,injec
   const tSpo=cfg.spo.enabled?(cfg.spo.tenants||[]).reduce((s,t)=>s+t.sites.reduce((ss,si)=>ss+Math.min(si.docs,1500),0),0):0;
   const totalGen=results?Object.values(results).reduce((s,v)=>s+(v.rows&&v.rows.length||0),0):0;
   const tblCount=results?new Set(Object.values(results).filter(v=>v.table).map(v=>v.table)).size:0;
-  const downloadSQL=()=>{if(!results)return;const F=buildSQL(results);let c=`-- AA26 Demo Data — ${new Date().toISOString()}\n-- ${cfg.global.domainName}\n\n`;for(const[n,s]of Object.entries(F))c+=s+"\n";const b=new Blob([c],{type:"text/sql"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`aa26-demo-${cfg.global.domainName.toLowerCase()}.sql`;a.click();};
-  const downloadScript=()=>{if(!results)return;const F=buildSQL(results);let sql=`-- AA26 Demo Data — ${new Date().toISOString()}\n-- ${cfg.global.domainName}\n\n`;for(const[n,s]of Object.entries(F))sql+=s+"\n";
+  const downloadSQL=()=>{if(!results)return;const F=buildSQL(results);let c=`-- AA Demo Data — ${new Date().toISOString()}\n-- ${cfg.global.domainName}\n\n`;for(const[n,s]of Object.entries(F))c+=s+"\n";const b=new Blob([c],{type:"text/sql"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`aa-demo-${cfg.global.domainName.toLowerCase()}.sql`;a.click();};
+  const downloadScript=()=>{if(!results)return;const F=buildSQL(results);let sql=`-- AA Demo Data — ${new Date().toISOString()}\n-- ${cfg.global.domainName}\n\n`;for(const[n,s]of Object.entries(F))sql+=s+"\n";
     const script=`#!/bin/bash
-# AA26 Demo Data Inject Script — Generated ${new Date().toISOString()}
+# AA Demo Data Inject Script — Generated ${new Date().toISOString()}
 # Organization: ${cfg.global.domainName}
 # 
 # This script injects demo data directly into ClickHouse via kubectl.
-# Run on the AA26 server (requires kubectl access to the access-analyzer namespace).
+# Run on the AA server (requires kubectl access to the access-analyzer namespace).
 #
 # Usage: bash inject-${cfg.global.domainName.toLowerCase()}.sh
 
 set -e
-echo "AA26 Demo Data Inject — ${cfg.global.domainName}"
+echo "AA Demo Data Inject — ${cfg.global.domainName}"
 echo "================================================"
 echo ""
 
@@ -4410,7 +5491,7 @@ SQLEOF
 
 echo ""
 echo "Injection complete!"
-echo "Refresh the AA26 dashboards to see the data."
+echo "Refresh the AA dashboards to see the data."
 `;
     const b=new Blob([script],{type:"text/x-shellscript"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`inject-${cfg.global.domainName.toLowerCase()}.sh`;a.click();};
   const downloadConfig=()=>{const b=new Blob([JSON.stringify(cfg,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`aa26-config-${cfg.global.domainName.toLowerCase()}.json`;a.click();};
@@ -4431,10 +5512,14 @@ echo "Refresh the AA26 dashboards to see the data."
     </div>
     {/* Step 0: Wipe — Optional, run before inject or configure */}
     <div id="step-0">
-    <Card t={t}><details>
-      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 0</span>🗑️ Wipe Data <span className={cn("text-xs font-normal",t.textFaint)}>(Optional)</span> {wipeResult&&<Badge variant={wipeResult.fail>0?"warn":"success"} t={t}>{wipeResult.ok} wiped</Badge>}</summary>
-      <div className="space-y-3 mt-3">
-        <div className={cn("p-2 rounded text-xs",t.bgInput,t.textFaint)}>Based on expected outcomes, this step can be run prior to injection or after, depending on your process. Use ClickHouse Wipe before regenerating data, or Configuration Wipe before re-running AA26 Configuration Setup (Step 5).</div>
+    <Card t={t}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <input type="checkbox" checked={wipeEnabled} onChange={e=>setWipeEnabled(e.target.checked)} className="w-4 h-4 accent-red-500 cursor-pointer" title="Enable this section — off by default so a destructive action isn't one accidental click away"/>
+        <span className={cn("text-sm font-semibold cursor-pointer select-none",t.text)} onClick={()=>setWipeEnabled(!wipeEnabled)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 0</span>🗑️ Wipe Data <span className={cn("text-xs font-normal",t.textFaint)}>(Optional)</span></span>
+        {wipeResult&&<Badge variant={wipeResult.fail>0?"warn":"success"} t={t}>{wipeResult.ok} wiped</Badge>}
+      </div>
+      <div className={cn("space-y-3 mt-3 transition-all",wipeEnabled?"":"opacity-40 pointer-events-none max-h-0 overflow-hidden")}>
+        <div className={cn("p-2 rounded text-xs",t.bgInput,t.textFaint)}>Based on expected outcomes, this step can be run prior to injection or after, depending on your process. Use ClickHouse Wipe before regenerating data, or Configuration Wipe before re-running AA Configuration Setup (Step 5).</div>
         {/* ClickHouse Data Wipe */}
         <details>
           <summary className={cn("text-xs font-semibold cursor-pointer select-none",t.text)}>🗑️ Wipe ClickHouse Demo Data</summary>
@@ -4442,17 +5527,17 @@ echo "Refresh the AA26 dashboards to see the data."
             <div className="flex items-center gap-2">
               <Badge variant={preserveV2?"warn":"danger"} t={t}>{preserveV2?"Preserve Scan Pipeline":"Full Reset"}</Badge>
             </div>
-            <p className={cn("text-xs",t.textFaint)}>Clears injected demo data (AD, FS, SPO, sensitive data, activity). {preserveV2?"Preserves entities/principals/permissions populated by real AA26 scans so Report pages keep working.":"WARNING: Also clears scan pipeline data — Report pages will go blank until scans re-run."}</p>
+            <p className={cn("text-xs",t.textFaint)}>Clears injected demo data (AD, FS, SPO, sensitive data, activity). {preserveV2?"Preserves entities/principals/permissions/permission_sets populated by real AA scans so Report pages keep working — but that also means reports built on this data (Shared Links, High Risk ACLs, Open Access, and others reading the v2 entity model) will keep showing OLD data until you either switch to Full Reset below or generate + inject fresh data.":"WARNING: Also clears scan pipeline data — Report pages including Shared Links, High Risk ACLs, and Open Access will go blank until scans re-run or fresh data is injected."}</p>
             <div className="flex items-center gap-2">
-              <Toggle checked={preserveV2} onChange={setPreserveV2} label="Preserve scan pipeline (entities, principals, permissions)" t={t}/>
-              <HelpIcon text="When ON: keeps tables that real AA26 scans populate (entities, principals, permissions, crawl_completions) so Report pages still show data. When OFF: full reset — Report pages go blank until scans re-run." t={t}/>
+              <Toggle checked={preserveV2} onChange={setPreserveV2} label="Preserve scan pipeline (entities, principals, permissions, permission_sets)" t={t}/>
+              <HelpIcon text="When ON (default): keeps tables that real AA scans populate (entities, principals, permissions, permission_sets, crawl_completions) so Report pages still show data — including Shared Links, High Risk ACLs, and Open Access, which read this v2 model rather than the raw scan tables. If you want those specific reports to actually go blank, turn this OFF (Full Reset) instead of just running the default wipe. When OFF: full reset — all these reports go blank until scans re-run or fresh data is injected." t={t}/>
             </div>
             <div className="flex items-center gap-2">
               <button onClick={()=>setWipeConfirm(true)} disabled={wiping} className={cn("px-3 py-1.5 rounded-lg text-xs font-semibold border transition text-red-400 border-red-500/30 hover:bg-red-500/10",wiping&&"opacity-50")}>Wipe Data...</button>
             </div>
             <Modal open={wipeConfirm} onClose={()=>setWipeConfirm(false)} title="🗑️ Confirm ClickHouse Wipe" t={t} danger>
               <p className={cn("text-xs mb-3",t.textMuted)}>This will permanently delete all demo data from ClickHouse: AD users, file shares, SharePoint, sensitive data, and activity events.</p>
-              <p className={cn("text-xs mb-4",preserveV2?t.textFaint:"text-red-400")}>{preserveV2?"✓ Scan pipeline data (entities, principals, permissions) will be preserved — Report pages stay working.":"⚠ Full Reset mode: scan pipeline data will also be cleared — Report pages will go blank."}</p>
+              <p className={cn("text-xs mb-4",preserveV2?t.textFaint:"text-red-400")}>{preserveV2?"✓ Scan pipeline data (entities, principals, permissions, permission_sets) will be preserved. Report pages stay working — but that means Shared Links, High Risk ACLs, and Open Access will keep showing OLD data, not zeroed out, since they read this preserved data.":"⚠ Full Reset mode: scan pipeline data will also be cleared — Shared Links, High Risk ACLs, Open Access, and other v2-model reports will go blank until scans re-run or fresh data is injected."}</p>
               <div className="flex items-center justify-end gap-2">
                 <button onClick={()=>setWipeConfirm(false)} className={cn("px-3 py-1.5 rounded-lg text-xs border transition",t.btnSecondary)}>Cancel</button>
                 <button onClick={()=>{setWipeConfirm(false);doWipe();}} className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white transition">{wiping?"Wiping...":"Yes, Wipe Data"}</button>
@@ -4468,7 +5553,7 @@ echo "Refresh the AA26 dashboards to see the data."
         </details>
         {/* AA26 Configuration Wipe — related to Step 5 */}
         <details className="mt-1">
-          <summary className={cn("text-xs font-semibold cursor-pointer select-none text-red-400")}>🗑️ Wipe AA26 Configuration <span className={cn("text-[10px] font-normal",t.textFaint)}>(relates to Step 5 — AA26 Configuration Setup)</span></summary>
+          <summary className={cn("text-xs font-semibold cursor-pointer select-none text-red-400")}>🗑️ Wipe AA Configuration <span className={cn("text-[10px] font-normal",t.textFaint)}>(relates to Step 5 — AA Configuration Setup)</span></summary>
           <div className="mt-2 space-y-2">
             <div className="flex items-center gap-3">
               <label className={cn("text-xs flex items-center gap-1.5 cursor-pointer",aa26WipeMode==="demo"?t.text:t.textFaint)}>
@@ -4480,7 +5565,7 @@ echo "Refresh the AA26 dashboards to see the data."
                 <span><b>Full Reset</b> — ALL source groups, sources, scans, executions & service accounts</span>
               </label>
             </div>
-            <p className={cn("text-[10px]",t.textFaint)}>{aa26WipeMode==="all"?"Deletes ALL configuration content including service accounts for a completely clean slate.":"Deletes only items matching the current config plan (domain: "+( cfg.global?.domainName||"demo")+"). Service accounts preserved. Won't catch items from previous runs with different domains."}</p>
+            <p className={cn("text-[10px]",t.textFaint)}>{aa26WipeMode==="all"?"Deletes ALL configuration content including service accounts for a completely clean slate.":`Deletes items identified by (a) ${(cfg.history?.injectedAA26?.sourceIds||[]).length} tracked source IDs from prior inject runs, (b) current cfg's expected names, (c) standard demo name patterns across any region/vertical. Service accounts preserved.`}</p>
             <div className="flex items-center gap-2">
               <button onClick={()=>setAa26WipeConfirm(true)} disabled={aa26WipeBusy||aa26ConfigBusy} className={cn("text-xs px-3 py-1.5 rounded-lg font-semibold border transition",aa26WipeMode==="all"?"text-red-400 border-red-500/30 hover:bg-red-500/10":"text-amber-400 border-amber-500/30 hover:bg-amber-500/10",(aa26WipeBusy||aa26ConfigBusy)&&"opacity-50")}>{aa26WipeMode==="all"?"Full Reset...":"Wipe Demo Config..."}</button>
             </div>
@@ -4500,15 +5585,25 @@ echo "Refresh the AA26 dashboards to see the data."
                   const localLogs = [`Starting ${aa26WipeMode==="all"?"FULL":"DEMO"} wipe...`];
                   const addLog = m => { localLogs.push(m); setAa26WipeLog([...localLogs]); };
                   setAa26WipeBusy(true);setAa26WipeLog([...localLogs]);setAa26WipeConfirm(false);
+                  let wipeStats = null;
                   try {
                     const verify = await aa26VerifySession(cfg);
                     if (!verify.ok) { addLog(`✗ ${verify.error}`); setAa26WipeBusy(false); return; }
                     addLog(`✓ Authenticated as ${verify.user.email}`);
-                    await aa26WipeConfig(cfg, addLog, aa26WipeMode);
+                    wipeStats = await aa26WipeConfig(cfg, addLog, aa26WipeMode);
                   } catch(e) { addLog(`✗ Error: ${e.message}`); }
-                  setAa26WipeBusy(false);setAa26PostSetupCmd(null);
+                  setAa26WipeBusy(false);
+                  // v3.0.2 — if wipe generated a MIP cleanup SQL, surface it in Post-Setup area
+                  if (wipeStats?.mipWipeCmd) setAa26PostSetupCmd(wipeStats.mipWipeCmd);
+                  else setAa26PostSetupCmd(null);
+                  // v3.0.8: wipe doesn't create new executions, so clear any pending verification state
+                  setPhase5PendingIds([]);setPhase5Status(null);setPhase5VerifyDetails(null);
+                  // v3.1.0: clear tracked AA26 IDs after wipe — they no longer exist in AA26
+                  if (wipeStats && (wipeStats.srcDel > 0 || wipeStats.scanDel > 0)) {
+                    setCfg(p => ({...p, history: {...(p.history||{}), injectedAA26: {serviceAccountIds:[], sourceIds:[], scanIds:[]}}}));
+                  }
                   setRunHistory(prev=>[{type:aa26WipeMode==="all"?"config-wipe-full":"config-wipe-demo",time:new Date().toLocaleString(),rows:0,tables:0,errors:0,logs:[...localLogs]},...prev.slice(0,19)]);
-                  if(toast)toast(`${aa26WipeMode==="all"?"Full Reset":"Demo Wipe"} complete`,"success");
+                  if(toast)toast(`${aa26WipeMode==="all"?"Full Reset":"Demo Wipe"} complete${wipeStats?.mipWipeCmd?" — copy MIP cleanup SQL below":""}`,"success");
                 }} className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition">{aa26WipeMode==="all"?"Yes, Full Reset":"Yes, Wipe Demo"}</button>
               </div>
             </Modal>
@@ -4524,13 +5619,100 @@ echo "Refresh the AA26 dashboards to see the data."
           </div>
         </details>
       </div>
+    </Card>
+    </div>
+    {/* v3.2.4: Step 1 — Activity Timeline settings, broken out from Organization page per request */}
+    <div id="step-1">
+    <Card t={t}><details>
+      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 1</span>📈 Activity Timeline {cfg.global.activityPattern?.enabled&&<Badge variant="success" t={t}>Business-hour patterns ON</Badge>}</summary>
+      <div className="mt-3">
+      <div className="mb-4">
+        <label className={cn("text-xs font-medium block mb-1.5",t.textFaint)}>📅 History Depth <HelpIcon text="How far back to simulate scan history. Drives total scan count together with Scan Frequency (Organization page) — more history = more scans = more data, slower generation." t={t}/></label>
+        <div className="grid grid-cols-4 gap-2">
+          {[3,6,9,12].map(m=>(
+            <button key={m} onClick={()=>u("historyMonths",m)} className={cn("text-xs px-3 py-2 rounded-lg border transition font-semibold",cfg.global.historyMonths===m?cn(t.accentBg,t.accent,t.accentBorder,"ring-2 ring-purple-500/30"):t.btnSecondary)}>{m} Month{m>1?"s":""}</button>
+          ))}
+        </div>
+        <p className={cn("text-[11px] mt-1",t.textFaint)}>Current: <b className={t.textMuted}>{cfg.global.historyMonths} months</b>, every {cfg.global.scanFreqDays} days. Need an exact non-preset value? Fine-tune on the Organization page.</p>
+      </div>
+      <div className={cn("mb-4 px-3 py-2 rounded-lg border",t.accentBg,t.accentBorder)}>
+        <span className={cn("text-xs",t.textMuted)}>Timeline: </span><span className={cn("text-xs font-semibold",t.accent)}>{scans} scans</span>
+        <span className={cn("text-xs",t.textFaint)}> over {cfg.global.historyMonths}mo (every {cfg.global.scanFreqDays}d){cfg.global.richActivityTimeline>0&&<> + ~{cfg.global.richActivityTimeline.toLocaleString()} rich activity events</>}</span>
+      </div>
+      <div className={cn("mb-4 px-3 py-2.5 rounded-lg text-xs space-y-1",t.bgInput)}>
+        <div className={cn("font-semibold",t.textMuted)}>📊 How this affects speed & volume</div>
+        <div className={t.textFaint}>Every file, user, and permission is multiplied by the scan count ({scans}×). More history or higher frequency = more scans = larger datasets and slower generation. Rich Activity Timeline (below) adds its own event count on top.</div>
+        <div className={t.textFaint}>
+          <strong className={t.textMuted}>Fast demo (recommended):</strong> 3 months, every 14 days = ~7 scans. Generates in seconds, injects in 1-2 min.
+        </div>
+        <div className={t.textFaint}>
+          <strong className={t.textMuted}>Rich history:</strong> 6 months, every 7 days = ~26 scans. 4× more data. Use "Server Inject Script" for datasets over 50K rows.
+        </div>
+      </div>
+      <div className="mt-3">
+        <label className={cn("text-xs font-medium block mb-1",t.textFaint)}>📈 Rich Activity Timeline</label>
+        <select value={cfg.global.richActivityTimeline||0} onChange={e=>u("richActivityTimeline",parseInt(e.target.value))}
+          className={cn("text-sm rounded-lg px-3 py-1.5 border w-full",t.bgInput,t.border,t.text)}>
+          <option value={0}>None — recent activity only</option>
+          <option value={1500}>+1,500 events (~2-3 min extra injection)</option>
+          <option value={3000}>+3,000 events (~4-6 min extra injection)</option>
+          <option value={4500}>+4,500 events (~6-9 min extra injection)</option>
+          <option value={6000}>+6,000 events (~8-12 min extra injection)</option>
+          <option value={7500}>+7,500 events (~10-15 min extra injection)</option>
+        </select>
+        {cfg.global.richActivityTimeline>0&&<p className={cn("text-xs mt-1",t.warn)}>Adds ~{cfg.global.richActivityTimeline.toLocaleString()} historical events spread across 6 months with burst weeks for realistic timeline charts.</p>}
+      </div>
+      {/* v3.0 — Activity Patterns by Time */}
+      <div className="mt-4">
+        <details className="group/details">
+          <summary className={cn("text-xs font-semibold cursor-pointer select-none flex items-center gap-2 list-none [&::-webkit-details-marker]:hidden",t.text)}>
+            <span className="inline-block transition-transform duration-150 group-open/details:rotate-90 text-[10px]">▶</span>
+            ⏰ Activity Patterns by Time
+            <HelpIcon text="Make activity events follow realistic business-hour patterns instead of uniform 24/7 distribution. Affects Rich Activity Timeline events (FS and SharePoint)." t={t}/>
+            {cfg.global.activityPattern?.enabled && <Badge variant="success" t={t}>ENABLED</Badge>}
+          </summary>
+          <div className={cn("mt-3 p-3 rounded-lg border space-y-3",t.bgInput,t.border)}>
+            <div className="flex items-center gap-2">
+              <Toggle checked={cfg.global.activityPattern?.enabled||false} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,enabled:v})} label="Enable realistic business-hour patterns" t={t}/>
+              <HelpIcon text="When OFF: events distributed uniformly 24/7 (synthetic-looking). When ON: events concentrate during business hours with realistic peaks and dips." t={t}/>
+            </div>
+            <div className={cfg.global.activityPattern?.enabled?"":"opacity-50 pointer-events-none"}>
+              <div className="grid grid-cols-2 gap-3 mb-3">
+                <Input label="Work Day Start" value={cfg.global.activityPattern?.workStart||9} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,workStart:Math.max(0,Math.min(23,v))})} type="number" min={0} max={23} suffix="hr (0-23)" help="Hour when business day starts. Default 9 = 9 AM. For 24/7 ops use 0." t={t}/>
+                <Input label="Work Day End" value={cfg.global.activityPattern?.workEnd||17} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,workEnd:Math.max(1,Math.min(24,v))})} type="number" min={1} max={24} suffix="hr (1-24)" help="Hour when business day ends. Default 17 = 5 PM. For extended hours try 19 (7 PM)." t={t}/>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Toggle checked={cfg.global.activityPattern?.lunchDip!==false} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,lunchDip:v})} label="🥗 Lunch Dip (reduce activity around noon)" t={t}/>
+                  <HelpIcon text="Adds a noticeable dip in activity around 12 PM — characteristic of real environments where people step away for lunch." t={t}/>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Toggle checked={cfg.global.activityPattern?.nightActivity||false} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,nightActivity:v})} label="🌙 Evenings/Nights activity (off-hours admins, late workers)" t={t}/>
+                  <HelpIcon text="ON = ~15% of events occur outside work hours (service accounts, on-call work, late nights). OFF = all events stay within work hours." t={t}/>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Toggle checked={cfg.global.activityPattern?.weekendActivity||false} onChange={v=>u("activityPattern",{...cfg.global.activityPattern,weekendActivity:v})} label="📅 Weekend activity (Saturday/Sunday)" t={t}/>
+                  <HelpIcon text="ON = sparse activity on weekends (admin work, on-call). OFF = no weekend events at all — typical of standard office environments." t={t}/>
+                </div>
+              </div>
+              <div className={cn("mt-2 p-2 rounded text-[10px]",t.bgCard,t.textFaint)}>
+                💡 <b>Preview:</b> Activity will concentrate {cfg.global.activityPattern?.workStart||9}:00–{cfg.global.activityPattern?.workEnd||17}:00 weekdays
+                {cfg.global.activityPattern?.lunchDip!==false && ", with a dip around noon"}
+                {cfg.global.activityPattern?.nightActivity && ", plus ~15% off-hours events"}
+                {cfg.global.activityPattern?.weekendActivity ? ", and sparse weekend events" : ", weekends excluded"}.
+              </div>
+            </div>
+          </div>
+        </details>
+      </div>
+      </div>
     </details></Card>
     </div>
-    <div id="step-1">
+    <div id="step-2">
     <Card t={t}><details open>
-      <summary className={cn("text-sm font-semibold cursor-pointer select-none mb-3",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 1</span>⚡ Generate & Export {results&&Object.keys(results).length>0&&<Badge variant="success" t={t}>{fmt(Object.values(results).reduce((a,r)=>a+(r.length||0),0))} rows ready</Badge>}</summary>
+      <summary className={cn("text-sm font-semibold cursor-pointer select-none mb-3",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 2</span>⚡ Generate & Export {results&&Object.keys(results).length>0&&<Badge variant="success" t={t}>{fmt(Object.values(results).reduce((a,r)=>a+(r.length||0),0))} rows ready</Badge>}</summary>
       <div className="grid grid-cols-5 gap-3 mb-4">
-        {[["Scans",scans,t.accent],["AD Users",cfg.ad.enabled?fmt(cfg.ad.userCount):"—",t.accent],["Files",cfg.fs.enabled?fmt(tFiles):"—",t.warn],["SPO Docs",cfg.spo.enabled?fmt(tSpo):"—",t.accent],["Taxonomies",cfg.sd.taxonomies.filter(x=>x.enabled).length,t.danger]].map(([l,v,c],i)=>(
+        {[["Scans",scans,t.accent],["AD Users",cfg.ad.enabled?fmt(cfg.ad.userCount):"—",t.accent],["Files",cfg.fs.enabled?fmt(tFiles):"—",t.warn],["SPO Docs",cfg.spo.enabled?fmt(tSpo):"—",t.accent],["Pattern Groups",(cfg.sd.enabledGroups||[]).length,t.danger]].map(([l,v,c],i)=>(
           <div key={i} className={cn("rounded-lg p-3 text-center",t.bgInput)}>
             <div className={cn("text-xl font-bold",c)}>{v}</div>
             <div className={cn("text-[10px] uppercase tracking-wider",t.textFaint)}>{l}</div>
@@ -4539,9 +5721,9 @@ echo "Refresh the AA26 dashboards to see the data."
       <p className={cn("text-xs mb-4",t.textFaint)}>File counts capped at 2K/share, SPO at 1.5K/site for browser perf. Python CLI handles full scale.</p>
       {(tFiles+tSpo)*scans>20000&&<div className={cn("px-3 py-2.5 rounded-lg border mb-4",t.warnBg,t.warnBorder||t.border)}>
         <div className={cn("text-xs font-semibold mb-1",t.warn)}>Large dataset detected — {fmt((tFiles+tSpo)*scans)}+ estimated rows</div>
-        <p className={cn("text-xs mb-2",t.textFaint)}>Browser injection may take several minutes for datasets over 20K rows. For faster loading, generate the SQL and run it directly on the AA26 server:</p>
-        <div className={cn("rounded p-2 font-mono text-[10px] break-all select-all cursor-pointer",t.codeBlock,t.textMuted)} onClick={()=>navigator.clipboard&&navigator.clipboard.writeText('cat aa26-demo-*.sql | sudo kubectl exec -i -n access-analyzer clickhouse-0 -- clickhouse-client --database=access_analyzer --multiquery')}>
-          1. Click "Download SQL" below{"\n"}2. Copy the .sql file to the AA26 server{"\n"}3. Run: cat aa26-demo-*.sql | sudo kubectl exec -i -n access-analyzer clickhouse-0 -- clickhouse-client --database=access_analyzer --multiquery
+        <p className={cn("text-xs mb-2",t.textFaint)}>Browser injection may take several minutes for datasets over 20K rows. For faster loading, generate the SQL and run it directly on the AA server:</p>
+        <div className={cn("rounded p-2 font-mono text-[10px] break-all select-all cursor-pointer",t.codeBlock,t.textMuted)} onClick={()=>navigator.clipboard&&navigator.clipboard.writeText('cat aa-demo-*.sql | sudo kubectl exec -i -n access-analyzer clickhouse-0 -- clickhouse-client --database=access_analyzer --multiquery')}>
+          1. Click "Download SQL" below{"\n"}2. Copy the .sql file to the AA server{"\n"}3. Run: cat aa-demo-*.sql | sudo kubectl exec -i -n access-analyzer clickhouse-0 -- clickhouse-client --database=access_analyzer --multiquery
         </div>
       </div>}
       <div className="flex gap-2">
@@ -4551,9 +5733,9 @@ echo "Refresh the AA26 dashboards to see the data."
       </div>
     </details></Card>
     </div>
-    <div id="step-2">
+    <div id="step-3">
     {(generating||progress.length>0)&&<Card t={t}><details open>
-      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 2</span>📋 Generation Log {generating?<span className={cn("text-xs animate-pulse ml-2",t.accent)}>⏳ Running...</span>:progress.length>0&&<Badge variant="success" t={t}>✓ Complete</Badge>}</summary>
+      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 3</span>📋 Generation Log {generating?<span className={cn("text-xs animate-pulse ml-2",t.accent)}>⏳ Running...</span>:progress.length>0&&<Badge variant="success" t={t}>✓ Complete</Badge>}</summary>
       <div className="flex items-center justify-end mt-2 mb-2">
         <LogDownloadBtn logs={progress} filename={`aa26-generation-log-${new Date().toISOString().slice(0,10)}.txt`} t={t}/>
       </div>
@@ -4563,9 +5745,9 @@ echo "Refresh the AA26 dashboards to see the data."
       </div>
     </details></Card>}
     </div>
-    <div id="step-3">
+    <div id="step-4">
     {results&&<Card className={cn("border",t.successBg)} t={t}><details open>
-      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 3</span>📦 Generated Data — {fmt(totalGen)} rows, {tblCount} tables</summary>
+      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 4</span>📦 Generated Data — {fmt(totalGen)} rows, {tblCount} tables</summary>
       {/* v3.0 — Stats Dashboard summary */}
       <div className={cn("grid grid-cols-2 md:grid-cols-4 gap-2 mt-3 mb-3")}>
         <div className={cn("p-2 rounded text-center",t.bgInput)}>
@@ -4635,9 +5817,9 @@ echo "Refresh the AA26 dashboards to see the data."
       </details>
     </details></Card>}
     </div>
-    <div id="step-4">
+    <div id="step-4b">
     {injectLogs.length>0&&<Card t={t}><details open>
-      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 4</span>💉 Injection Log {injecting&&<span className={cn("text-xs animate-pulse ml-2",t.accent)}>⏳ Injecting...</span>} {injectResult&&injectResult.total>0&&<Badge variant="success" t={t}>✓ {fmt(injectResult.total)} rows injected</Badge>} {injectResult&&injectResult.errors>0&&<Badge variant="danger" t={t}>{injectResult.errors} errors</Badge>}</summary>
+      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 5</span>💉 Injection Log {injecting&&<span className={cn("text-xs animate-pulse ml-2",t.accent)}>⏳ Injecting...</span>} {injectResult&&injectResult.total>0&&<Badge variant="success" t={t}>✓ {fmt(injectResult.total)} rows injected</Badge>} {injectResult&&injectResult.errors>0&&<Badge variant="danger" t={t}>{injectResult.errors} errors</Badge>}</summary>
       <div className="flex items-center justify-end mt-2 mb-2">
         <LogDownloadBtn logs={injectLogs} filename={`aa26-injection-log-${new Date().toISOString().slice(0,10)}.txt`} t={t}/>
       </div>
@@ -4651,7 +5833,7 @@ echo "Refresh the AA26 dashboards to see the data."
     <Card t={t}><details>
       <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 5</span>🛠️ AA26 Configuration Setup <span className={cn("text-xs font-normal",t.textFaint)}>— Service Accounts, Sources & Scans (Optional)</span> {aa26ConfigBusy&&<span className={cn("text-xs animate-pulse ml-1",t.accent)}>⏳ Running...</span>} {!aa26ConfigBusy&&aa26ConfigLog.length>0&&!aa26ConfigLog.some(m=>m.startsWith("✗"))&&<Badge variant="success" t={t}>✓ Complete</Badge>} {!aa26ConfigBusy&&aa26ConfigLog.some(m=>m.startsWith("✗"))&&<Badge variant="warn" t={t}>⚠ Errors</Badge>}</summary>
       <div className="mt-3 space-y-3">
-        <div className={cn("p-2 rounded text-xs",t.bgInput,t.textMuted)}>One-time setup per AA26 environment. Requires <b>AA26 API Authentication</b> verified on the Connection tab (same-origin mode strongly recommended). Creates the Configuration page entries so a clean install matches a real lab. Idempotent — skips items that already exist by name.</div>
+        <div className={cn("p-2 rounded text-xs",t.bgInput,t.textMuted)}>One-time setup per AA environment. Requires <b>AA API Authentication</b> verified on the Connection tab (same-origin mode strongly recommended). Creates the Configuration page entries so a clean install matches a real lab. Idempotent — skips items that already exist by name.</div>
         <div className="space-y-1">
           <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.successBg,t.success)}>1/5</span><span className={cn("text-xs font-semibold",t.text)}>Service Accounts (3)</span><span className={cn("text-xs",t.textFaint)}>AD, Entra Reg App, SPO Reg App</span></div>
           <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.successBg,t.success)}>2/5</span><span className={cn("text-xs font-semibold",t.text)}>Sources (5)</span><span className={cn("text-xs",t.textFaint)}>CloudLab AD, Windows FS, LUG, Entra ID, SharePoint</span></div>
@@ -4661,8 +5843,10 @@ echo "Refresh the AA26 dashboards to see the data."
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={async()=>{
-            setAa26ConfigLog(["Starting AA26 Configuration Setup..."]);
+            setAa26ConfigLog(["Starting AA Configuration Setup..."]);
             setAa26ConfigBusy(true);setAa26PostSetupCmd(null);setAa26ConfigPhase(0);
+            // v3.0.8: reset Phase 5 verification state at start of new run
+            setPhase5PendingIds([]);setPhase5Status(null);setPhase5VerifyDetails(null);
             // Hook into log to advance phase counter
             const logFn = m => {
               setAa26ConfigLog(prev=>[...prev,m]);
@@ -4679,8 +5863,31 @@ echo "Refresh the AA26 dashboards to see the data."
               logFn(``);
               const result = await aa26RunFullConfig(cfg, logFn);
               if (result.postSetupCmd) setAa26PostSetupCmd(result.postSetupCmd);
+              // v3.0.8: stash the new exec IDs and mark Phase 5 as pending
+              if (Array.isArray(result.newExecIds) && result.newExecIds.length > 0) {
+                setPhase5PendingIds(result.newExecIds);
+                setPhase5Status('pending');
+              }
+              // v3.1.0: persist tracked IDs (SAs, sources, scans) so the wipe can identify
+              // demo-managed items by UUID even after region/vertical/hostname customization
+              if (result.createdIds) {
+                setCfg(p => {
+                  const inj = p.history?.injectedAA26 || { serviceAccountIds: [], sourceIds: [], scanIds: [] };
+                  return {
+                    ...p,
+                    history: {
+                      ...(p.history || {}),
+                      injectedAA26: {
+                        serviceAccountIds: [...new Set([...inj.serviceAccountIds, ...result.createdIds.serviceAccountIds])],
+                        sourceIds: [...new Set([...inj.sourceIds, ...result.createdIds.sourceIds])],
+                        scanIds: [...new Set([...inj.scanIds, ...result.createdIds.scanIds])],
+                      },
+                    },
+                  };
+                });
+              }
               setAa26ConfigPhase(5);
-              if(toast)toast(`AA26 Configuration complete — ${result.scnCreated} scans, ${result.execCreated} executions`,"success");
+              if(toast)toast(`AA Configuration complete — ${result.scnCreated} scans, ${result.execCreated} executions`,"success");
             } catch(e) { logFn(`✗ Error: ${e.message}`); if(toast)toast(`Configuration failed: ${e.message}`,"error"); }
             setAa26ConfigBusy(false);
           }} disabled={aa26ConfigBusy||(!cfg.connection.aa26SessionCookie&&!(typeof window!=="undefined"&&window.location.hostname===cfg.connection.aa26Host))} className={cn("text-xs px-4 py-2 rounded-lg font-semibold transition",t.btnAccent,"disabled:opacity-50")}>
@@ -4696,15 +5903,77 @@ echo "Refresh the AA26 dashboards to see the data."
           {aa26ConfigLog.map((m,i)=><div key={i} className={m.startsWith("✗")||m.includes("Failed")?t.danger:m.startsWith("✓")||m.startsWith("→")?t.textMuted:t.textFaint}>{m}</div>)}
         </div>}
         {aa26PostSetupCmd&&<div className="space-y-2">
+          {/* v3.0.8: Phase 5 application status banner — polls the API to verify the SQL has been applied */}
+          {phase5Status==='pending'&&<div className={cn("p-3 rounded-lg border-2 flex items-start gap-3","bg-red-50 dark:bg-red-950/30 border-red-400 dark:border-red-800")}>
+            <span className="text-2xl flex-shrink-0">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <div className={cn("font-bold text-sm",t.danger||"text-red-700 dark:text-red-300")}>Phase 5 SQL NOT YET APPLIED</div>
+              <div className={cn("text-xs mt-1",t.textMuted)}>
+                {phase5PendingIds.length} new execution{phase5PendingIds.length===1?'':'s'} still showing <code className={cn("px-1 rounded",t.codeBlock)}>totalObjects=0</code> in AA. Copy the kubectl command below and run on the AA server, then click "Verify Now" to confirm.
+              </div>
+            </div>
+            <button onClick={async()=>{
+              setPhase5Status('verifying');
+              try {
+                const results = await Promise.all(phase5PendingIds.map(id =>
+                  fetch(`${cfg.connection.url}/api/v1/scan-executions/${id}`, {credentials:'include'}).then(r=>r.ok?r.json():null)
+                ));
+                const applied = results.filter(e => e && (e.totalObjects ?? e.total_objects) > 0).length;
+                const total = phase5PendingIds.length;
+                setPhase5VerifyDetails({applied, total, sample: results.slice(0,3).map(e => ({id:e?.id?.slice(0,8), total:e?.totalObjects??e?.total_objects??'?'}))});
+                if (applied === total) {
+                  setPhase5Status('applied');
+                  if(toast)toast(`✓ All ${total} executions populated — Phase 5 SQL applied successfully`,"success");
+                } else if (applied > 0) {
+                  setPhase5Status('partial');
+                  if(toast)toast(`⚠ Partial: ${applied}/${total} executions updated — check kubectl output for errors`,"warning");
+                } else {
+                  setPhase5Status('pending');
+                  if(toast)toast(`✗ No executions updated yet — SQL hasn't been run or rolled back`,"error");
+                }
+              } catch(e) {
+                setPhase5Status('pending');
+                if(toast)toast(`Verification error: ${e.message}`,"error");
+              }
+            }} className={cn("text-xs px-3 py-2 rounded-lg font-semibold flex-shrink-0","bg-red-600 hover:bg-red-700 text-white")}>✓ Verify Now</button>
+          </div>}
+          {phase5Status==='verifying'&&<div className={cn("p-3 rounded-lg border-2",t.bgInput,t.border)}>
+            <span className={cn("text-sm",t.textMuted)}>⏳ Polling AA API for {phase5PendingIds.length} execution{phase5PendingIds.length===1?'':'s'}...</span>
+          </div>}
+          {phase5Status==='applied'&&<div className={cn("p-3 rounded-lg border-2 flex items-start gap-3","bg-emerald-50 dark:bg-emerald-950/30 border-emerald-400 dark:border-emerald-800")}>
+            <span className="text-2xl flex-shrink-0">✅</span>
+            <div className="flex-1 min-w-0">
+              <div className={cn("font-bold text-sm",t.success||"text-emerald-700 dark:text-emerald-300")}>Phase 5 SQL Applied Successfully</div>
+              <div className={cn("text-xs mt-1",t.textMuted)}>All {phase5VerifyDetails?.total||phase5PendingIds.length} new executions show real object counts. Source groups linked, historical executions cloned, MIP labels inserted. AA dashboards should now render correctly.</div>
+            </div>
+            <button onClick={()=>{setPhase5Status(null);setPhase5PendingIds([]);setPhase5VerifyDetails(null);}} className={cn("text-xs px-2 py-1 rounded",t.btnSecondary||t.codeBlock)}>Dismiss</button>
+          </div>}
+          {phase5Status==='partial'&&<div className={cn("p-3 rounded-lg border-2 flex items-start gap-3","bg-amber-50 dark:bg-amber-950/30 border-amber-400 dark:border-amber-800")}>
+            <span className="text-2xl flex-shrink-0">⚠️</span>
+            <div className="flex-1 min-w-0">
+              <div className={cn("font-bold text-sm","text-amber-700 dark:text-amber-300")}>Phase 5 SQL Partially Applied</div>
+              <div className={cn("text-xs mt-1",t.textMuted)}>{phase5VerifyDetails?.applied}/{phase5VerifyDetails?.total} executions updated. The kubectl command may have errored partway — check its output for SQL errors.</div>
+            </div>
+            <button onClick={async()=>{
+              setPhase5Status('verifying');
+              const results = await Promise.all(phase5PendingIds.map(id =>
+                fetch(`${cfg.connection.url}/api/v1/scan-executions/${id}`, {credentials:'include'}).then(r=>r.ok?r.json():null)
+              ));
+              const applied = results.filter(e => e && (e.totalObjects ?? e.total_objects) > 0).length;
+              const total = phase5PendingIds.length;
+              setPhase5VerifyDetails({applied, total});
+              setPhase5Status(applied===total?'applied':applied>0?'partial':'pending');
+            }} className={cn("text-xs px-3 py-2 rounded-lg font-semibold flex-shrink-0","bg-amber-600 hover:bg-amber-700 text-white")}>↻ Re-check</button>
+          </div>}
           <div className={cn("p-2 rounded text-xs",t.bgInput)}>
             <div className="flex items-center justify-between mb-1">
-              <span className={cn("font-semibold",t.text)}>📋 Phase 5: Post-Setup Command (run on AA26 server)</span>
+              <span className={cn("font-semibold",t.text)}>📋 Phase 5: Post-Setup Command (run on AA server)</span>
               <button onClick={()=>{navigator.clipboard.writeText(aa26PostSetupCmd);}} className={cn("text-xs px-2 py-1 rounded font-semibold",t.btnAccent)}>📋 Copy to Clipboard</button>
             </div>
             <div className={cn("text-[10px] mb-2 space-y-1",t.textFaint)}>
               <p><b>What this does:</b> Creates source groups in Postgres and links them to sources (the REST API cannot do this), backdates scan execution timestamps to 3 weeks ago with realistic durations, and sets object counts (600-6,000) per scan type.</p>
-              <p><b>How to run:</b> 1) Click "Copy to Clipboard" above. 2) SSH to the AA26 server (<code className={cn("px-1 rounded",t.codeBlock)}>ssh sysadmin@appaa</code>). 3) Paste and press Enter. The command runs SQL directly against the AA26 Postgres database via kubectl.</p>
-              <p><b>When to re-run:</b> Only after a fresh "Configure AA26" run. Each run generates new UUIDs — always use the latest command.</p>
+              <p><b>How to run:</b> 1) Click "Copy to Clipboard" above. 2) SSH to the AA server (<code className={cn("px-1 rounded",t.codeBlock)}>ssh sysadmin@appaa</code>). 3) Paste and press Enter. The command runs SQL directly against the AA Postgres database via kubectl.</p>
+              <p><b>When to re-run:</b> Only after a fresh "Configure AA" run. Each run generates new UUIDs — always use the latest command.</p>
             </div>
             <pre className={cn("text-[9px] max-h-32 overflow-auto p-1 rounded",t.codeBlock)} style={{whiteSpace:"pre-wrap",wordBreak:"break-all"}}>{aa26PostSetupCmd}</pre>
           </div>
@@ -4712,84 +5981,248 @@ echo "Refresh the AA26 dashboards to see the data."
       </div>
     </details></Card>
     </div>
-    {runHistory&&runHistory.length>0&&<Card t={t}><details>
-      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}>📜 Run History ({runHistory.length})</summary>
-      {(()=>{
-        const totalPages = Math.max(1, Math.ceil(runHistory.length / HISTORY_PER_PAGE));
-        const safePage = Math.min(historyPage, totalPages - 1);
-        const startIdx = safePage * HISTORY_PER_PAGE;
-        const endIdx = Math.min(startIdx + HISTORY_PER_PAGE, runHistory.length);
-        const pageItems = runHistory.slice(startIdx, endIdx);
-        return <>
-          <div className="flex items-center justify-between mb-2">
-            <div className="flex items-center gap-2">
-              <span className={cn("text-sm font-semibold",t.text)}>📜 Run history</span>
-              <span className={cn("text-xs",t.textFaint)}>{runHistory.length} runs total — persisted across reloads</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button onClick={()=>{const lines=runHistory.map((r,i)=>`[${String(i+1).padStart(2,"0")}] ${r.time} | ${r.type.toUpperCase().padEnd(16)} | ${r.type==="wipe"?r.tables+" tables":r.type.startsWith("config-wipe")?"API cleanup":fmt(r.rows)+" rows"}${r.errors>0?" | "+r.errors+" errors":""}${r.cancelled?" | cancelled":""}`);const txt=`AA26 Demo Data Manager — Run History\nExported: ${new Date().toLocaleString()}\n${"=".repeat(60)}\n${lines.join("\n")}`;const b=new Blob([txt],{type:"text/plain"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`aa26-run-history-${new Date().toISOString().slice(0,10)}.txt`;a.click();}} className={cn("text-[11px] px-2 py-0.5 rounded border transition",t.btnSecondary)}>Download History</button>
-              <button onClick={()=>{setRunHistory([]);setHistoryPage(0);}} className={cn("text-[11px] px-2 py-0.5 rounded border transition",t.btnSecondary)}>Clear History</button>
-            </div>
-          </div>
-          <div className="space-y-1">
-            {pageItems.map((run,relativeIdx)=>{
-              const absoluteIdx = startIdx + relativeIdx;
-              return <div key={absoluteIdx} className={cn("rounded px-3 py-1.5 text-xs",t.bgInput)}>
-                <div className="flex items-center gap-3">
-                  <span className={cn("font-mono text-[10px]",t.textFaint)}>#{absoluteIdx+1}</span>
-                  <Badge variant={run.type==="generate"?"accent":run.type==="wipe"||run.type.startsWith("config-wipe")?"danger":run.errors>0?"warn":"success"} t={t}>{run.type==="generate"?"Gen":run.type==="wipe"?"Wipe":run.type==="config-wipe-full"?"Config Reset":run.type==="config-wipe-demo"?"Config Wipe":run.type==="selective-inject"?"Selective":"Inject"}</Badge>
-                  <span className={t.textMuted}>{run.time}</span>
-                  <span className={t.text}>{run.type==="wipe"?(run.tables||0)+" tables":run.type.startsWith("config-wipe")?"API cleanup":fmt(run.rows)+" rows"}</span>
-                  {run.errors>0&&<span className={t.danger}>{run.errors} errors</span>}
-                  {run.cancelled&&<span className={t.warn}>cancelled</span>}
-                  {run.logs&&run.logs.length>0&&<span className={cn("text-[10px]",t.textFaint)}>({run.logs.length} log lines)</span>}
-                </div>
-                {run.logs&&run.logs.length>0&&<details className="mt-1">
-                  <summary className={cn("text-[10px] cursor-pointer select-none",t.textFaint)}>View log</summary>
-                  <div className={cn("rounded p-2 mt-1 max-h-32 overflow-y-auto font-mono text-[10px] space-y-0.5",t.codeBlock)}>
-                    {run.logs.map((m,i)=><div key={i} className={m.includes("Error")||m.includes("fail")?t.danger:t.textMuted}>{m}</div>)}
-                  </div>
-                </details>}
-              </div>;
-            })}
-          </div>
-          {totalPages > 1 && <div className={cn("flex items-center justify-between mt-3 pt-2 border-t",t.border)}>
-            <span className={cn("text-xs",t.textFaint)}>
-              Showing {startIdx+1}–{endIdx} of {runHistory.length}
-            </span>
-            <div className="flex items-center gap-1">
-              <button
-                onClick={()=>setHistoryPage(0)}
-                disabled={safePage === 0}
-                className={cn("text-xs px-2 py-1 rounded border transition", safePage===0?"opacity-30 cursor-not-allowed":t.btnSecondary)}
-                title="First page">⏮</button>
-              <button
-                onClick={()=>setHistoryPage(p=>Math.max(0,p-1))}
-                disabled={safePage === 0}
-                className={cn("text-xs px-2 py-1 rounded border transition", safePage===0?"opacity-30 cursor-not-allowed":t.btnSecondary)}
-                title="Previous page">◀ Prev</button>
-              <span className={cn("text-xs px-3 py-1 rounded",t.bgInput,t.text)}>
-                Page {safePage+1} of {totalPages}
-              </span>
-              <button
-                onClick={()=>setHistoryPage(p=>Math.min(totalPages-1,p+1))}
-                disabled={safePage >= totalPages-1}
-                className={cn("text-xs px-2 py-1 rounded border transition", safePage>=totalPages-1?"opacity-30 cursor-not-allowed":t.btnSecondary)}
-                title="Next page">Next ▶</button>
-              <button
-                onClick={()=>setHistoryPage(totalPages-1)}
-                disabled={safePage >= totalPages-1}
-                className={cn("text-xs px-2 py-1 rounded border transition", safePage>=totalPages-1?"opacity-30 cursor-not-allowed":t.btnSecondary)}
-                title="Last page">⏭</button>
-            </div>
-          </div>}
-        </>;
-      })()}
-    </details></Card>}
   </div>;
 }
 
 function SH({n,title,t}){return <div className="flex items-center gap-3"><div className={cn("w-8 h-8 rounded-lg flex items-center justify-center text-sm font-bold",t.accentBg,t.accent)}>{n}</div><h2 className={cn("text-lg font-semibold",t.text)}>{title}</h2></div>;}
+
+// v3.2.4: Run History moved out of the Generate page into a global slide-out drawer, reachable
+// from the Jump-to bar on every tab. Same content/behavior as before, just relocated — and the
+// duplicate "Run history" sub-title that used to sit under the card's own header is gone.
+function RunHistoryDrawer({open,onClose,runHistory,setRunHistory,t}){
+  const [historyPage,setHistoryPage]=useState(0);
+  const HISTORY_PER_PAGE=10;
+  if(!open)return null;
+  const totalPages=Math.max(1,Math.ceil(runHistory.length/HISTORY_PER_PAGE));
+  const safePage=Math.min(historyPage,totalPages-1);
+  const startIdx=safePage*HISTORY_PER_PAGE;
+  const endIdx=Math.min(startIdx+HISTORY_PER_PAGE,runHistory.length);
+  const pageItems=runHistory.slice(startIdx,endIdx);
+  return <>
+    <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose}/>
+    <div className={cn("fixed top-0 right-0 h-full w-full max-w-lg z-50 overflow-y-auto shadow-2xl p-4",t.bgCard)}>
+      <div className="flex items-center justify-between mb-3">
+        <div className="flex items-center gap-2">
+          <span className={cn("text-sm font-semibold",t.text)}>📜 Run History</span>
+          <span className={cn("text-xs",t.textFaint)}>{runHistory.length} runs total — persisted across reloads</span>
+        </div>
+        <button onClick={onClose} className={cn("text-lg",t.textFaint)} title="Close">✕</button>
+      </div>
+      {runHistory.length===0 ? <p className={cn("text-xs",t.textFaint)}>No runs yet.</p> : <>
+      <div className="flex items-center gap-2 mb-2">
+        <button onClick={()=>{const lines=runHistory.map((r,i)=>`[${String(i+1).padStart(2,"0")}] ${r.time} | ${r.type.toUpperCase().padEnd(16)} | ${r.type==="wipe"?r.tables+" tables":r.type.startsWith("config-wipe")?"API cleanup":fmt(r.rows)+" rows"}${r.errors>0?" | "+r.errors+" errors":""}${r.cancelled?" | cancelled":""}`);const txt=`AA Demo Data Manager — Run History\nExported: ${new Date().toLocaleString()}\n${"=".repeat(60)}\n${lines.join("\n")}`;const b=new Blob([txt],{type:"text/plain"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`aa-run-history-${new Date().toISOString().slice(0,10)}.txt`;a.click();}} className={cn("text-[11px] px-2 py-0.5 rounded border transition",t.btnSecondary)}>Download History</button>
+        <button onClick={()=>{setRunHistory([]);setHistoryPage(0);}} className={cn("text-[11px] px-2 py-0.5 rounded border transition",t.btnSecondary)}>Clear History</button>
+      </div>
+      <div className="space-y-1">
+        {pageItems.map((run,relativeIdx)=>{
+          const absoluteIdx = startIdx + relativeIdx;
+          return <div key={absoluteIdx} className={cn("rounded px-3 py-1.5 text-xs",t.bgInput)}>
+            <div className="flex items-center gap-3">
+              <span className={cn("font-mono text-[10px]",t.textFaint)}>#{absoluteIdx+1}</span>
+              <Badge variant={run.type==="generate"?"accent":run.type==="wipe"||run.type.startsWith("config-wipe")?"danger":run.errors>0?"warn":"success"} t={t}>{run.type==="generate"?"Gen":run.type==="wipe"?"Wipe":run.type==="config-wipe-full"?"Config Reset":run.type==="config-wipe-demo"?"Config Wipe":run.type==="selective-inject"?"Selective":"Inject"}</Badge>
+              <span className={t.textMuted}>{run.time}</span>
+              <span className={t.text}>{run.type==="wipe"?(run.tables||0)+" tables":run.type.startsWith("config-wipe")?"API cleanup":fmt(run.rows)+" rows"}</span>
+              {run.errors>0&&<span className={t.danger}>{run.errors} errors</span>}
+              {run.cancelled&&<span className={t.warn}>cancelled</span>}
+              {run.logs&&run.logs.length>0&&<span className={cn("text-[10px]",t.textFaint)}>({run.logs.length} log lines)</span>}
+            </div>
+            {run.logs&&run.logs.length>0&&<details className="mt-1">
+              <summary className={cn("text-[10px] cursor-pointer select-none",t.textFaint)}>View log</summary>
+              <div className={cn("rounded p-2 mt-1 max-h-32 overflow-y-auto font-mono text-[10px] space-y-0.5",t.codeBlock)}>
+                {run.logs.map((m,i)=><div key={i} className={m.includes("Error")||m.includes("fail")?t.danger:t.textMuted}>{m}</div>)}
+              </div>
+            </details>}
+          </div>;
+        })}
+      </div>
+      {totalPages > 1 && <div className={cn("flex items-center justify-between mt-3 pt-2 border-t",t.border)}>
+        <span className={cn("text-xs",t.textFaint)}>
+          Showing {startIdx+1}–{endIdx} of {runHistory.length}
+        </span>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={()=>setHistoryPage(0)}
+            disabled={safePage === 0}
+            className={cn("text-xs px-2 py-1 rounded border transition", safePage===0?"opacity-30 cursor-not-allowed":t.btnSecondary)}
+            title="First page">⏮</button>
+          <button
+            onClick={()=>setHistoryPage(p=>Math.max(0,p-1))}
+            disabled={safePage === 0}
+            className={cn("text-xs px-2 py-1 rounded border transition", safePage===0?"opacity-30 cursor-not-allowed":t.btnSecondary)}
+            title="Previous page">◀ Prev</button>
+          <span className={cn("text-xs px-3 py-1 rounded",t.bgInput,t.text)}>
+            Page {safePage+1} of {totalPages}
+          </span>
+          <button
+            onClick={()=>setHistoryPage(p=>Math.min(totalPages-1,p+1))}
+            disabled={safePage >= totalPages-1}
+            className={cn("text-xs px-2 py-1 rounded border transition", safePage>=totalPages-1?"opacity-30 cursor-not-allowed":t.btnSecondary)}
+            title="Next page">Next ▶</button>
+          <button
+            onClick={()=>setHistoryPage(totalPages-1)}
+            disabled={safePage >= totalPages-1}
+            className={cn("text-xs px-2 py-1 rounded border transition", safePage>=totalPages-1?"opacity-30 cursor-not-allowed":t.btnSecondary)}
+            title="Last page">⏭</button>
+        </div>
+      </div>}
+      </>}
+    </div>
+  </>;
+}
+
+// v3.2.5: Editable view over the region's name/office data. Local component state until
+// Save is clicked, at which point it writes into cfg.localeOverrides[locale] — getLocale()
+// (the single choke point every generator call goes through) picks these up automatically,
+// so no other generator code needed to change.
+// v3.3.1: shows exactly what changed (schema-wise) on the connected AA instance vs. what this
+// app version's generator assumes. Detection only — it identifies and displays the drift, and
+// produces a paste-ready report for a Claude session to act on, but it doesn't rewrite the
+// generator code itself. That step still needs a human bringing this report back to Claude.
+function CompatibilityDrawer({open,onClose,results,checking,error,liveVersion,onRetry,t}){
+  if(!open)return null;
+  const problems=(results||[]).filter(r=>!r.ok);
+  const clean=(results||[]).filter(r=>r.ok);
+  const buildReport=()=>{
+    const lines=[`AA schema compatibility check — connected version v${liveVersion||'unknown'}, app validated against v${AA26_SUPPORTED_VERSIONS.join(', v')}`,''];
+    if(problems.length===0){lines.push('No drift found — every column the generator writes to exists on the connected instance.');}
+    else{
+      lines.push(`${problems.length} table(s) with drift:`);
+      for(const p of problems){
+        if(!p.tableExists){lines.push(`- ${p.table}: TABLE NOT FOUND on this instance`);}
+        else{lines.push(`- ${p.table}: missing column(s) ${p.missing.join(', ')}${p.extra.length?` (also has new column(s) not yet used: ${p.extra.join(', ')})`:''}`);}
+      }
+      lines.push('','Please update the generator in aa26-demo-data-manager-v2.jsx to handle the drift above — adjust the affected table\'s cols/row-construction to match the current schema.');
+    }
+    return lines.join('\n');
+  };
+  return <>
+    <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose}/>
+    <div className={cn("fixed top-0 right-0 h-full w-full max-w-2xl z-50 overflow-y-auto shadow-2xl p-4",t.bgCard)}>
+      <div className="flex items-center justify-between mb-1">
+        <span className={cn("text-sm font-semibold",t.text)}>🔍 AA Compatibility Check</span>
+        <button onClick={onClose} className={cn("text-lg",t.textFaint)} title="Close">✕</button>
+      </div>
+      <p className={cn("text-xs mb-4",t.textFaint)}>Compares the 13 tables this app writes to with a fixed column list against what's actually on the connected instance (v{liveVersion||'?'}). Tables that auto-discover their schema (entities, principals, Copilot/AD/Entra activity) aren't checked here — they adapt automatically.</p>
+
+      {checking&&<div className={cn("text-sm",t.textMuted)}>Checking live schema...</div>}
+      {error&&<div className={cn("text-sm p-3 rounded-lg border",t.dangerBg||t.bgInput,t.danger)}>Check failed: {error}<div className="mt-2"><button onClick={onRetry} className={cn("text-xs px-3 py-1.5 rounded-lg border transition",t.btnSecondary)}>Retry</button></div></div>}
+
+      {!checking&&!error&&results&&<>
+        {problems.length===0
+          ? <div className={cn("text-sm p-3 rounded-lg border mb-3",t.successBg,t.success)}>✓ No drift — every column this app writes to still exists. This version bump looks safe.</div>
+          : <div className="space-y-2 mb-3">
+              {problems.map((p,i)=>
+                <div key={i} className={cn("p-3 rounded-lg border",t.warnBg,t.warn)}>
+                  <div className="font-semibold text-sm">{p.table}</div>
+                  {!p.tableExists
+                    ? <div className="text-xs mt-1">Table not found on this instance.</div>
+                    : <>
+                        <div className="text-xs mt-1">Missing: {p.missing.join(', ')}</div>
+                        {p.extra.length>0&&<div className="text-xs mt-0.5 opacity-75">New (unused): {p.extra.join(', ')}</div>}
+                      </>}
+                </div>
+              )}
+            </div>
+        }
+        {clean.length>0&&<details className="mb-3">
+          <summary className={cn("text-xs cursor-pointer select-none",t.textFaint)}>{clean.length} table(s) checked clean</summary>
+          <div className={cn("text-xs mt-1",t.textFaint)}>{clean.map(c=>c.table).join(', ')}</div>
+        </details>}
+        <button onClick={()=>navigator.clipboard&&navigator.clipboard.writeText(buildReport())} className={cn("text-xs px-3 py-1.5 rounded-lg border transition font-semibold",t.btnSecondary)}>📋 Copy report — paste into a Claude session to get this fixed</button>
+      </>}
+    </div>
+  </>;
+}
+
+function RegionDataDrawer({open,onClose,cfg,setCfg,t,toast}){
+  const localeKey = cfg.global.locale;
+  const base = LOCALES[localeKey] || LOCALES.us;
+  const [firstNames,setFirstNames]=useState([]);
+  const [lastNames,setLastNames]=useState([]);
+  const [offices,setOffices]=useState([]);
+  const [newFirst,setNewFirst]=useState("");
+  const [newLast,setNewLast]=useState("");
+
+  useEffect(()=>{
+    if(!open)return;
+    const eff = getLocale(cfg);
+    setFirstNames([...eff.firstNames]);
+    setLastNames([...eff.lastNames]);
+    setOffices((eff.offices||[]).map(row=>[...row]));
+  },[open,localeKey]);
+
+  if(!open)return null;
+
+  const hasOverride = !!cfg.localeOverrides?.[localeKey];
+
+  const save=()=>{
+    setCfg(p=>({...p,localeOverrides:{...(p.localeOverrides||{}),[localeKey]:{firstNames,lastNames,offices}}}));
+    if(toast)toast(`${base.name} data updated — wipe + re-inject to see it reflected`,"success");
+    onClose();
+  };
+  const resetDefaults=()=>{
+    setCfg(p=>{const ov={...(p.localeOverrides||{})};delete ov[localeKey];return{...p,localeOverrides:ov};});
+    setFirstNames([...base.firstNames]);setLastNames([...base.lastNames]);setOffices((base.offices||[]).map(row=>[...row]));
+    if(toast)toast(`${base.name} reset to built-in defaults`,"success");
+  };
+  const updateOffice=(idx,ci,val)=>setOffices(o=>o.map((row,i)=>i===idx?row.map((c,j)=>j===ci?val:c):row));
+  const removeOffice=(idx)=>setOffices(o=>o.filter((_,i)=>i!==idx));
+  const addOffice=()=>setOffices(o=>[...o,["New Office","123 Main St","City","ST","00000",o[0]?.[5]||"US"]]);
+
+  const NameList=({label,names,setNames,newVal,setNewVal})=>(
+    <div className="mb-4">
+      <div className={cn("text-xs font-semibold mb-1.5",t.textMuted)}>{label} ({names.length})</div>
+      <div className={cn("flex flex-wrap gap-1 mb-2 max-h-32 overflow-y-auto p-2 rounded border",t.bgInput,t.border)}>
+        {names.map((n,i)=><span key={i} className={cn("text-[11px] rounded px-2 py-0.5 flex items-center gap-1",t.bgCard,t.border,"border")}>{n}<button onClick={()=>setNames(f=>f.filter((_,fi)=>fi!==i))} className="text-red-400 font-bold" title="Remove">✕</button></span>)}
+        {names.length===0&&<span className={cn("text-[11px]",t.textFaint)}>None — add at least one below</span>}
+      </div>
+      <div className="flex gap-2">
+        <input value={newVal} onChange={e=>setNewVal(e.target.value)} placeholder={`Add ${label.toLowerCase()}...`} onKeyDown={e=>{if(e.key==='Enter'&&newVal.trim()){setNames(f=>[...f,newVal.trim()]);setNewVal("");}}} className={cn("flex-1 text-xs rounded-lg px-2 py-1.5 border",t.bgInput,t.border,t.text)}/>
+        <button onClick={()=>{if(newVal.trim()){setNames(f=>[...f,newVal.trim()]);setNewVal("");}}} className={cn("text-xs px-3 py-1.5 rounded-lg border transition font-semibold",t.btnSecondary)}>Add</button>
+      </div>
+    </div>
+  );
+
+  return <>
+    <div className="fixed inset-0 bg-black/40 z-40" onClick={onClose}/>
+    <div className={cn("fixed top-0 right-0 h-full w-full max-w-2xl z-50 overflow-y-auto shadow-2xl p-4",t.bgCard)}>
+      <div className="flex items-center justify-between mb-1">
+        <span className={cn("text-sm font-semibold",t.text)}>✏️ Edit Region Data — {base.name}</span>
+        <button onClick={onClose} className={cn("text-lg",t.textFaint)} title="Close">✕</button>
+      </div>
+      <p className={cn("text-xs mb-4",t.textFaint)}>Changes here override the built-in {base.name} name/office pools used for generation{hasOverride?" — custom data currently active for this region.":"."} Wipe + re-inject after saving to see it reflected in generated data.</p>
+
+      <NameList label="First Names" names={firstNames} setNames={setFirstNames} newVal={newFirst} setNewVal={setNewFirst}/>
+      <NameList label="Last Names" names={lastNames} setNames={setLastNames} newVal={newLast} setNewVal={setNewLast}/>
+
+      <div className="mb-4">
+        <div className="flex items-center justify-between mb-1.5">
+          <span className={cn("text-xs font-semibold",t.textMuted)}>HQ Offices ({offices.length})</span>
+          <button onClick={addOffice} className={cn("text-[11px] px-2 py-0.5 rounded border transition font-semibold",t.btnSecondary)}>+ Add Office</button>
+        </div>
+        <div className="space-y-1.5">
+          {offices.map((row,idx)=>(
+            <div key={idx} className={cn("grid gap-1 p-2 rounded border items-center",t.border)} style={{gridTemplateColumns:"1fr 1.5fr 1fr 0.6fr 0.7fr 0.6fr auto"}}>
+              {["Label","Street","City","State","Zip","Country"].map((ph,ci)=>
+                <input key={ci} value={row[ci]||""} onChange={e=>updateOffice(idx,ci,e.target.value)} placeholder={ph} className={cn("text-[11px] rounded px-1.5 py-1 border w-full",t.bgInput,t.border,t.text)}/>
+              )}
+              <button onClick={()=>removeOffice(idx)} className="text-red-400 font-bold px-1" title="Remove office">✕</button>
+            </div>
+          ))}
+          {offices.length===0&&<div className={cn("text-[11px] p-2",t.textFaint)}>No offices — add at least one above.</div>}
+        </div>
+      </div>
+
+      <div className={cn("flex items-center justify-between mt-4 pt-3 border-t",t.border)}>
+        <button onClick={resetDefaults} className={cn("text-xs px-3 py-1.5 rounded-lg border transition",t.btnSecondary)}>Reset to Built-in Defaults</button>
+        <div className="flex gap-2">
+          <button onClick={onClose} className={cn("text-xs px-3 py-1.5 rounded-lg border transition",t.btnSecondary)}>Cancel</button>
+          <button onClick={save} className={cn("text-xs px-4 py-1.5 rounded-lg font-semibold transition",t.btnPrimary)}>Save Changes</button>
+        </div>
+      </div>
+    </div>
+  </>;
+}
 
 /* ─── Main App ────────────────────────────────────────── */
 export default function App(){
@@ -4817,6 +6250,9 @@ export default function App(){
     return c;
   });
   const [step,setStep]=useState(0);
+  // v3.2.4: clicking Next/Back/Jump-to was leaving scroll position wherever it happened to be
+  // (often mid-page from the previous step) instead of showing the new step from the top.
+  useEffect(()=>{window.scrollTo({top:0,behavior:"instant"});},[step]);
   const [results,setResults]=useState(null);
   const [progress,setProgress]=useState([]);
   const [generating,setGenerating]=useState(false);
@@ -4829,6 +6265,18 @@ export default function App(){
   const [skipWipeRef]=useState({current:false}); // V2.6.15: true = additive inject (no wipe)
   const [stopping,setStopping]=useState(false);
   const [runHistory,setRunHistory]=useState(()=>{try{return JSON.parse(localStorage.getItem("aa26_run_history")||"[]");}catch(e){return[];}});
+  const [showHistoryDrawer,setShowHistoryDrawer]=useState(false);
+  const [showConfigMenu,setShowConfigMenu]=useState(false);
+  const [showCompatDrawer,setShowCompatDrawer]=useState(false);
+  const [compatResults,setCompatResults]=useState(null);
+  const [compatChecking,setCompatChecking]=useState(false);
+  const [compatError,setCompatError]=useState("");
+  const openCompatCheck=async()=>{
+    setShowCompatDrawer(true);setCompatChecking(true);setCompatError("");
+    try{ setCompatResults(await runSchemaCompatibilityCheck(cfg)); }
+    catch(e){ setCompatError(e.message); }
+    setCompatChecking(false);
+  };
   // Persist run history to localStorage
   useEffect(()=>{try{localStorage.setItem("aa26_run_history",JSON.stringify(runHistory));}catch(e){}},[runHistory]);
   // Persist connection config
@@ -4929,18 +6377,57 @@ export default function App(){
 
       {/* Header */}
       <div className={cn("border-b sticky top-0 z-10 backdrop-blur",t.border,mode==="dark"?"bg-slate-950/90":"bg-stone-50/90")}>
-        <div className="max-w-6xl mx-auto px-6 py-2.5 flex items-center justify-between">
+        <div className="w-4/5 mx-auto px-6 py-2.5 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-7 h-7 rounded bg-gradient-to-br from-purple-500 to-purple-700 flex items-center justify-center text-white text-xs font-bold shadow">N</div>
+            <img src={mode==="dark" ? "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAHmElEQVR42u2dXWwcVxXH/+fOnf2cXX+mcewkzkftOI1TUSKUBlqUlipCBUV9AB5AqUBFSBQVgVJA4sWtEPSlKKLJA1GlRApCkYxAUVHTkkp1QP0I1AlVQASqItepkzSxG7de27szc+89PHhcTBq1Itl4d53zf7JsX83M+d3zOau9hAYUMysACgATkb3a/xw8eDDT29tb9H0/yOV0xhiTTv4Ut7Q0zY6Pl8pnzpyZ2bVrVwkAX7meCHCO9fHjx7F9+3ZLRHwjnoUayOi0wOhu/veHDh3K3333nb1B0NTvedSvPK9HEa1SnmoDuAhQVhFpx04nS5xSKnKOI2aeYWCSrbtorBmNYvMvtnR6cnLyzKZNm0avuL43v76aMHSDGN4jIgPAAsCpU6/2dHV135dOp3d42vtUJpPq0l72ipUOgIVjB2YG8wc2U0SklVI5gtcMeF0A+heubG7Oh1PTk2+Y2L5cKZdfGBk5+xIRXfrvPQ1poDpeQfW+4+dDzODgYNNdd336gSDIfc3T+rO5bCEJKQZRHIKZbRJKiBlE9KHnW/gzJ9dAYkReEIaU1lp5Kv3Bktly6XIcxy/OzoSHDx8+/Nzu3bvLC7ziujyC6tT43rzhT5wYWrl+/W3fymYz38jniysBwNgynLOGGQSAiEhV+frzQBwRyPdTHiEFAJiZmXqzVJo68Nprf316586dE1feb0MDSJIriMg988yv27dtu/d7+SD4djYTtAIGYVSxC8IILeJ9zcNAys96gIdyuXR+cvLyL5588gd79+z5TflavaFuAAwNDel77rnHAMC5C+ceKhaCx4N8sctxiDiODTN7Simqg03iALh0Kq0BH6WZ9/9+fuzcD/v6Nj2XVE5qYZHQCEmYmFkRkXn99T/3rl3bs7dYbNkxt+OnTZKA9SJu+I++2blwpyphhYlCW8gX+3t6ckcvjb+z94mfPfIjIir/PyFJ1fJhBgYGVJII7djYyNc3bOj/S7HYsiOMSrYSljkxfF3mKaUUEZGuhNPO2Mgta1/+yGOP7//T0NDzfURkmVnXdQhKdr0D4E1MXHiqra3jYetCxHFklVJeozWHzjmTSRf0bHl64uzoW1/euHHzcWbWSflcXx4wODjoEZEbHHy69b33xp9va+t4OIpnTBxH3IjGTzxCV8KSzWUz7WvWrPvDP9742xeJyHycJ1Ctdv7p068u7+7uO1YsNt8eRtMxEflYAnLOOd9PqTgy8ejom5/v6/vEix+VE1QtjH/06NFl69ZtfKFYbL69EpbMUjF+4gkqjiOXSqf81avX/+7kyZMbk5ygagog6Wx53759wbbPbH02n2/aXAlLRimlscSklFJRVLHZbNB0a+/a3w4ODgYLbLD4IWjBWIHHJy78vr2t4/6lavz/CUfsTCZV0O9cfPtXKzpWP3i1ULRYHuARkT07NrKnva3j/jCajpe68efadaWjeMZ0LF+5a2Tknw8kochbVAAJdfPvkTNfXdW15ruxKcfA0on5H//8Tjlnua39lqeOHDlSSCYbtCgAmFkppezw8EvrV3Ss/KW1obPWaCLcNCJSKjYVWwhaVm3desejSe+jFgMAJWMGWrv21oPZTFCITcT1MM+pgTzrQlcoNn3/2LEjnQDcwMCAuqFJeD7hjI299Z2uru59YTRtiEjjJhUzm3Qq0BcuvP1EZ+fqH893yepGhR4Abnh4eEVLa8tPjQ1dredOdQDAcy7mQjH/zRMnjhaVUoaZSV+tNr3OGpiTktNcHB/7SS5bbAqjUkykPMy9J2xE49H1DgWVUhSb0Ab51mWdnRu+xMwHAHj6RrztJyLzyit//GR767KHAIN0KuM30Pv/D8k6A2tt1XjmC/kHARwA4PT7UxOntNZX+WDGNTYfcC7tB+rdyUvDZ8+ev9fakNjzHIxpvArG9z2OY9vZteLRbKbwhSietUR0PcNCZW2Fctn8nSdPvtxNRKO6WGi+A6jmANIA0AiC4NSK5c1DSyF+V8LprySvnfk6IwMZa0wmHaSXd676HIADerY87TxPA1wlFyAYX+e0NYaTrk8nVBpRGoAJ49lUdXMKkPH9+wAc0ESklKKq2T9pvhQphaT1pmv9xECdJF9biWaqmScVESOVSm3Zv3+/f1OXhrUaEVkXwtNe95YtW9YLgEUfTRCstS6Xzafb24v9AqA2oY0BjUwud5sAqKF83+8RADWKRHPZWHULgNr11/A87xYBUCMPYFgwuFUA1AiAcw6e8rICoEalKDPDWpMTALUrRaGUUgKg1m2xmEAACACRABAAIgEgAEQCQACIBIAAEAkAASASAAJAJAAEgEgACACRABAAIgEgAEQCQACIBIAAEAkAASASAAJAJAAEgEgACACRABAAIgEgAEQCQACIBIAAEAkAASASAAJAJAAEgEgACACRABAAIgFQl9I8JzBX7ZAIRtWOBKorMea+eb56hmKG1lqT1rpqAIwxGgDR0vIuhblvPNda66qcx5Uc5AAdRfGsc1X1AGOt1da5ytLZ+1wBMDt3CJKtznGM8wAuv3tpM5Cp2r2mUsxEszQ1NVVKSNsGNr0FgCh0j6VT+HnK97hSCat0Il0a1ij8B22xbaadpdsXAAAAAElFTkSuQmCC" : "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAGAAAABgCAYAAADimHc4AAAG20lEQVR42u2dTWxcVxXH/+fc+97M+GOc4Nipx45TJTGxjNwQRQQqQqcIxMeuQhqpXVR8iE1BSGSBxK6wYAtIhRVCaoUKQmZJowgQ0aQsUElLU6mTojpIad00rTFqY9cZe949h8WbsYcqDkV945lxzl8aPc3TzH33nt89555z35MeoT/FZZR5HOO6gIVwux/Mzc3FuFkc2pBkEIGKLIhUlQKHEOWj1WSj/t6qJOvLy7W1nS5SRtkDQBXVAEA7MRDqI6NTBRVewJwCP5TWyYMHDw4W3fSMI3cfwPMMPgrQIQLtA6EIUAGqeRAcAEChSqgTUFdgHcC/ofo2oK9BUSMOL9elUbt6/dLr7Rd/HI9zDTVawIJkCaMfAFAZZVdFNWmdODp28lgcFT4P4i8z6BSxm3Tkm8NRqGp6BADVlt0B0PaACc3vBCLaMoVCIKFRF8I/iOQvQRp/TsLGs4s3Xlxu94ysvIJ6f8anIWZ6ZHp/YXDyIUfRwww84FycBwBRgapAoQEgBZQIoC0L336sbYZTVUDT/wIEZYCZiUHEUAiCNFZU5aJQ8qs1LJ1fWlq6lRWIngRQQcVtGf7AqYmBXO5bDv4b3kUlgBAkQCGhOYcJAGfcBU3BkBCUCOyYXQojJIsB4Zc3deUX16+/stLsscMOa1G/AeA0ZpCWSrOj++gj32WKHnMcjYoKREPL6LzLfVeFCgFE5JiJkYTGdaGNn15Z+usTAOrNSfN/rw89A6DpzgkAfHTqU9+MKP6Bp3hSNEBEE0oX0R7or4qChIk9MyORxkshufW9V9587g/bkwjyQVtzPRLr3TmcC/eW5o+XirO/zrnCWYCKQUICgHrH+Gh2J/VUEQmO/ARz9OjocGn8X6t6AbjZqKDiaqhpP3jAVsg5Xvrk1z3nf+I5GkmkEdJBUs9naWloIjiOuBHqlzY21x65uvz3xXaP7lUALVfl2cn7fxa7gcdUBaISCOTQZ1Ig8ex9Io23N5P1yqs3/nbxg0DoEoA0azg8cmLfULH4m4jzX0pCIwHU9cOsv4M3BCbnVGVzQ9e/8uobzz3zvyBQt2b+4bG5ewZzo+cjzp9IpJEQ4LEHpFBhYobq5q1k7QuLNy5V29PqbgNgAHLk4H3jBT/yJ+9y84kke8b4/w3BsWh4t95459NX37r88k7ZEe9ivwhQnZqaKuR98ffe5fek8Vt1imgIjv1IHA3/bnT0+HAFFbrdhN8tAFRBhQHCsE7/NnKFT+ylsLMDBBckJDEXZsdy+3++gIWQ2qALdUAZZX8O58Lx0v0/zvuhrybSaBAQYY+LABaVJHK5kyMDY5efXfvjlffXCB33gAoqropqMjNx+pGcHzjbuEuMvw1BGarqXPzE2NjcULqdvh2KOu0BXENNZ8bnj+Si4jNIDd9DVe3uVM4CDRHH+yJGY2X16QtllP01XJNOewA1Fx5EUfFJx9GwqOjdZfytUOREgnjKnZ0+MDvR3MLmjgJo7eXPTpz+duQKn0kznv6rcLNiIFDxHBcL8f7vANAyytzJOoAB6KHRkxPFwvAVJjeU3qXa1bS358oDIkaQzZX31lZnrr17+R1ge18900+Trg7G+R95joui2qoCpU8/mokXaJDI5Q/kB/MPNbND59GBu/1VVJPDpRMfj1zua6oBTNTfWY9u3WHOpDXm6FEATz6IB4U+NnXmhSwjkQLiyHND1l9Q6NMKECFI+26UB5DscGxX+7mk7b930vt/d6d2b3ds76Mqu0ASYhS+H7ncF4MkH3anVglECtlcD2sz/3zz+de8o/hktgAUniMECc/X3rh4YS8E77lD5Ur6PAXphw5DkOA5imOJPgvgKS+aSMZrcSJKPg2dFXcMq34Rw0k/Gn6772/lMkyIFCAwos8BeMqnC3GmIYibizuAhTCJMi3ifOhHANt9fyDDB7GUVQUgnD6FU9HdnBZ2rTJWFRDo8PpkuNcAdIGAQoXZ5xW5eQPQlaxWlUAg5TkD0E0xHzUA3YhBrQdXlQxAtxAoFAQeNQBdcwKFQg8YgO65AIgwYAC6lwlBFQUD0FU3IGcAup2JmgkMgAEwGQADYDIABsBkAAyAyQAYAJMBMAAmA2AATAbAAJgMgAEwGQADYDIABsBkAAyAyQAYAJMBMAAmA2AATAbAAJgMgAEwGQADYDIABsBkAAyAyQAYAJMBMAAmA2AATAbAAJgMgAEwGQADYDIAPalOvEVJO9BmL0g7MTZPIMr2HTLaanMPeZdyOib4bF+5TvACWc/8JT4IHpD6HorU9dROSBTqs3MpBc2MnzmCfJZMSXNQurW5trp448VlpHT7NSQRAD12z5mxQpwbJmyqIs5wtm7gPylo5WrKu8i4AAAAAElFTkSuQmCC"} alt="Netwrix" className="w-7 h-7" style={{objectFit:"contain"}} />
             <div>
-              <div className={cn("text-sm font-semibold leading-tight",t.text)}>AA26 Demo Data Manager</div>
-              <div className={cn("text-[10px] uppercase tracking-[0.15em]",t.textFaint)}>Netwrix Access Analyzer <span className={cn("ml-1",t.textMuted)}>v{APP_VERSION}</span></div>
+              <div className={cn("text-sm font-semibold leading-tight",t.text)}>AA Demo Data Manager</div>
+              <div className={cn("text-[10px] uppercase tracking-[0.15em] flex items-center gap-1.5",t.textFaint)}>
+                <span>Netwrix Access Analyzer <span className={cn("ml-1",t.textMuted)}>v{APP_VERSION}</span></span>
+                <span className={t.textFaint}>·</span>
+                <span title="AA product versions this build was validated against">Supports AA v{AA26_SUPPORTED_VERSIONS.join(', v')}</span>
+                {cfg.connection.aa26LiveVersion && (
+                  AA26_SUPPORTED_VERSIONS.includes(cfg.connection.aa26LiveVersion)
+                    ? <span className={cn("normal-case tracking-normal px-1.5 py-0.5 rounded border",t.successBg,t.success)} title="Connected AA version matches">✓ v{cfg.connection.aa26LiveVersion} connected</span>
+                    : <span onClick={openCompatCheck} className={cn("normal-case tracking-normal px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 cursor-pointer hover:bg-amber-500/30")} title="Connected AA version differs from what this build was validated against — click to check what actually changed">⚠ v{cfg.connection.aa26LiveVersion} connected (differs — click to check)</span>
+                )}
+              </div>
             </div>
             {injecting&&<div className={cn("flex items-center gap-2 px-3 py-1 rounded-lg text-xs font-semibold animate-pulse",t.accentBg,t.accent)} onClick={()=>setStep(5)} style={{cursor:"pointer"}}>
               Injection running... <span className={cn("text-[10px]",t.textFaint)}>click to view</span>
             </div>}
           </div>
           <div className="flex items-center gap-3">
+            <div className="relative">
+              <button onClick={()=>setShowConfigMenu(v=>!v)} className={cn("w-8 h-8 rounded-md flex items-center justify-center text-sm transition",t.btnSecondary)} title="Config Presets — Export/Import">💾</button>
+              {showConfigMenu && <>
+                <div className="fixed inset-0 z-30" onClick={()=>setShowConfigMenu(false)}/>
+                <div className={cn("absolute left-0 top-full mt-1 w-48 rounded-lg border shadow-lg z-40 py-1",t.bgCard,t.border)}>
+                  <button onClick={()=>{
+                    const exportCfg = {...cfg, connection: {...cfg.connection, mb_pass: "", _mbSession: undefined, aa26SessionCookie: ""}};
+                    const blob = new Blob([JSON.stringify(exportCfg,null,2)],{type:"application/json"});
+                    const a = document.createElement("a");
+                    a.href = URL.createObjectURL(blob);
+                    a.download = `aa26-config-${cfg.global?.domainName||"demo"}-${new Date().toISOString().slice(0,10)}.json`;
+                    a.click();
+                    setShowConfigMenu(false);
+                    if(toast)toast("Configuration exported","success");
+                  }} className={cn("w-full text-left text-xs px-3 py-2 transition",t.bgHover,t.text)}>📥 Export Config</button>
+                  <label className={cn("block w-full text-left text-xs px-3 py-2 cursor-pointer transition",t.bgHover,t.text)}>📤 Import Config
+                    <input type="file" accept=".json" className="hidden" onChange={async e=>{
+                      const f=e.target.files[0];if(!f)return;
+                      try{
+                        const text=await f.text();
+                        const imported=JSON.parse(text);
+                        setCfg(prev=>({...prev,...imported,connection:{...prev.connection,...(imported.connection||{}),mb_pass:prev.connection.mb_pass,_mbSession:prev.connection._mbSession,aa26SessionCookie:prev.connection.aa26SessionCookie}}));
+                        if(toast)toast(`Imported config: ${imported.global?.domainName||"unknown"}`,"success");
+                      }catch(err){if(toast)toast(`Import failed: ${err.message}`,"error");}
+                      e.target.value="";setShowConfigMenu(false);
+                    }}/>
+                  </label>
+                </div>
+              </>}
+            </div>
             <div className="flex items-center gap-0.5">
               {steps.map((s,i)=>(
                 <button key={s} onClick={()=>setStep(i)} className={cn("px-2.5 py-1 rounded-md text-[11px] font-semibold transition",step===i?t.pillActive:cn(t.textFaint,t.bgHover))}>{s}</button>
@@ -4954,7 +6441,7 @@ export default function App(){
       </div>
       {/* v3.0 — Active Operation Banner (shows during generation/injection) */}
       {(generating||injecting)&&<div className={cn("sticky top-0 z-30 w-full border-b shadow-lg",injecting?"bg-red-600":"bg-violet-600","border-white/20")} style={{animation:"fadeIn 0.3s ease-out"}}>
-        <div className="max-w-6xl mx-auto px-6 py-2.5 flex items-center gap-3 text-white">
+        <div className="w-4/5 mx-auto px-6 py-2.5 flex items-center gap-3 text-white">
           <span className="text-base animate-pulse">{injecting?"🔴":"⚡"}</span>
           <div className="flex-1 min-w-0">
             <div className="text-xs font-bold tracking-wide uppercase">
@@ -4974,7 +6461,7 @@ export default function App(){
       </div>}
 
       {/* Content */}
-      <div className="max-w-6xl mx-auto px-6 py-6">
+      <div className="w-4/5 mx-auto px-6 py-6">
         {/* v3.0 — Global Step Navigation with active state */}
         <div className={cn("rounded-lg p-2 mb-4 flex items-center gap-2 flex-wrap",t.bgInput)}>
           <span className={cn("text-xs font-semibold",t.textFaint)}>Jump to:</span>
@@ -4989,7 +6476,12 @@ export default function App(){
             "text-[11px] px-2.5 py-1 rounded border transition font-semibold",
             step===s.n ? cn(t.accentBg,t.accent,t.accentBorder,"ring-2 ring-purple-500/30") : t.btnSecondary
           )}>{s.n}. {s.label}</button>)}
+          <button onClick={()=>setShowHistoryDrawer(true)} className={cn("ml-auto text-[11px] px-2.5 py-1 rounded border transition font-semibold flex items-center gap-1.5",t.btnSecondary)} title="Run history">
+            📜 History {runHistory.length>0&&<span className={cn("px-1.5 rounded-full",t.accentBg,t.accent)}>{runHistory.length}</span>}
+          </button>
         </div>
+        <RunHistoryDrawer open={showHistoryDrawer} onClose={()=>setShowHistoryDrawer(false)} runHistory={runHistory} setRunHistory={setRunHistory} t={t}/>
+        <CompatibilityDrawer open={showCompatDrawer} onClose={()=>setShowCompatDrawer(false)} results={compatResults} checking={compatChecking} error={compatError} liveVersion={cfg.connection.aa26LiveVersion} onRetry={openCompatCheck} t={t}/>
         <div key={step} className="step-content">
         {step===0&&<StepConnection cfg={cfg} setCfg={setCfg} t={t} toast={toast}/>}
         {step===1&&<StepOrg cfg={cfg} setCfg={setCfg} t={t} toast={toast}/>}
@@ -5008,3 +6500,4 @@ export default function App(){
     </div>
   );
 }
+

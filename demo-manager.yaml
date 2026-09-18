@@ -1,0 +1,102 @@
+# AA26 Demo Data Manager — k3s manifest
+# Deploys the built demo-data-manager.html as a static nginx site behind Traefik at
+# /demo-manager/. Installed/updated by install-demo-manager.sh — see
+# AA26-DemoDataManager-Deployment.md for the full reference and troubleshooting.
+#
+# Traefik API version: this file uses the modern `traefik.io/v1alpha1`. If this
+# cluster runs the legacy CRDs, install-demo-manager.sh detects that automatically
+# and rewrites both occurrences below to `traefik.containo.us/v1alpha1` before
+# applying — no manual edit needed on first install.
+
+# 1. Deployment — single-replica nginx pod serving the HTML from a ConfigMap
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: demo-manager
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: demo-manager
+  template:
+    metadata:
+      labels:
+        app: demo-manager
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+        resources:
+          requests:
+            cpu: 10m
+            memory: 16Mi
+          limits:
+            cpu: 100m
+            memory: 64Mi
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 2
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        volumeMounts:
+        - name: html
+          mountPath: /usr/share/nginx/html
+      volumes:
+      - name: html
+        configMap:
+          name: demo-manager-html
+---
+# 2. Service — cluster-internal access
+apiVersion: v1
+kind: Service
+metadata:
+  name: demo-manager
+  namespace: default
+spec:
+  selector:
+    app: demo-manager
+  ports:
+  - port: 80
+    targetPort: 80
+---
+# 3. Middleware — strips /demo-manager before nginx sees the request
+#    (nginx serves from /, so the prefix has to come off first)
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: demo-manager-stripprefix
+  namespace: default
+spec:
+  stripPrefix:
+    prefixes:
+    - /demo-manager
+---
+# 4. IngressRoute — routes /demo-manager/* to the Service, reusing AA26's
+#    existing TLS termination (no separate cert handling needed here)
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: demo-manager
+  namespace: default
+spec:
+  entryPoints:
+  - websecure
+  routes:
+  - match: PathPrefix(`/demo-manager`)
+    kind: Rule
+    services:
+    - name: demo-manager
+      port: 80
+    middlewares:
+    - name: demo-manager-stripprefix
+  tls: {}

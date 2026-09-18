@@ -56,10 +56,11 @@ preflight() {
 # ─── State detection ─────────────────────────────────────────────────────────
 detect_state() {
   HAS_HTML=false; HAS_YAML=false; HAS_CONFIGMAP=false; HAS_DEPLOYMENT=false
-  [ -f "$HTML_FILE" ] && HAS_HTML=true
-  [ -f "$YAML_FILE" ] && HAS_YAML=true
-  kubectl get configmap "$CONFIGMAP" -n "$NAMESPACE" >/dev/null 2>&1 && HAS_CONFIGMAP=true
-  kubectl get deployment "$DEPLOYMENT" -n "$NAMESPACE" >/dev/null 2>&1 && HAS_DEPLOYMENT=true
+  if [ -f "$HTML_FILE" ]; then HAS_HTML=true; fi
+  if [ -f "$YAML_FILE" ]; then HAS_YAML=true; fi
+  if kubectl get configmap "$CONFIGMAP" -n "$NAMESPACE" >/dev/null 2>&1; then HAS_CONFIGMAP=true; fi
+  if kubectl get deployment "$DEPLOYMENT" -n "$NAMESPACE" >/dev/null 2>&1; then HAS_DEPLOYMENT=true; fi
+  return 0
 }
 
 # ─── Status command ──────────────────────────────────────────────────────────
