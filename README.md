@@ -1,12 +1,5 @@
 # Greater Good - AA Demo Data Manager
 
-
-## **All Files:**
-
-**Internal Netwrix GitHub Where File Resides:** <https://github.com/netwrix-corp/nwx-aa_demomanager>
-
-[AA26_DemoMGR_311.zip 267441] *— filename is stale; current build is v3.3.3. Re-export from the repo/latest chat output for an up-to-date zip.*
-
 ---
 
 # AA Demo Data Manager
