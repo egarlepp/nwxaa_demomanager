@@ -17,7 +17,7 @@ const {useState, useCallback, useEffect} = React;
 
 
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.3.3";
+const APP_VERSION = "3.3.7";
 // v3.2.0: the AA26 product version this build was actually validated against. Compared live
 // against the connected instance's real version (read via /api/v1/source-types) so a mismatch
 // gets flagged before it causes confusing data-injection failures.
@@ -3254,10 +3254,27 @@ async function aa26GetScans(cfg) {
 // creation flow was verified against the real API this pass, but no scan was actually
 // run to completion, so this endpoint's exact shape is still unverified. Test this
 // specific call against a real scan before trusting it end-to-end.
+// v3.3.5: scan ID reading was fixed (real IDs confirmed for both create and exists paths).
+// v3.3.6: with a genuinely real, freshly-created scan ID confirmed live, execution creation
+// STILL 404s — tried flat POST, nested /scans/:id/executions, /scans/:id/scan-executions,
+// wrapped {execution:{}}/{scanExecution:{}} bodies, snake_case scan_id, and OPTIONS (which
+// returned 404 with no Allow header at all, the strongest signal). Conclusion: this AA version
+// does not expose a way to create a scan-execution via the REST API — not a payload-shape bug,
+// a capability gap. GET on the collection works fine (200, real data), only creation is missing/
+// not routed. Left the attempt in (harmless, and picks it back up automatically if a future AA
+// version restores it) but the error message below reflects this finding instead of inviting
+// another round of guessing the request shape.
 async function aa26SimulateExecution(cfg, scanId, scanType) {
+  if (!scanId) return { ok:false, error:`no scan ID provided — skipping rather than sending a malformed request` };
   const create = await aa26Fetch(cfg, "/api/v1/scan-executions", { method:"POST", body: { scanId: scanId } });
-  if (!create.ok) return { ok:false, error:`create failed: ${create.status} ${JSON.stringify(create.body).slice(0,120)}` };
-  const execId = create.body.id;
+  if (!create.ok) {
+    if (create.status === 404 && !create.body) {
+      return { ok:false, error:`HTTP 404 (empty body) — confirmed this AA version doesn't support creating scan-executions via REST API at all (checked multiple paths/payload shapes/OPTIONS live). Not fixable from this side; Scan Executions page will stay empty until a real scan runs, or until this is populated directly via Postgres (would need scan_executions table schema — not yet investigated).` };
+    }
+    return { ok:false, error:`create failed: ${create.status} ${JSON.stringify(create.body).slice(0,120)}` };
+  }
+  const execId = create.body?.id || create.body?.data?.id || create.body?.execution?.id || create.body?.scanExecution?.id;
+  if (!execId) return { ok:false, error:`created but couldn't find execution ID in response: ${JSON.stringify(create.body).slice(0,150)}` };
   const toRunning = await aa26Fetch(cfg, `/api/v1/scan-executions/${execId}`, { method:"PATCH", body: { status: "running" } });
   if (!toRunning.ok) return { ok:false, error:`pending→running failed: ${toRunning.status}`, execId };
   const toCompleted = await aa26Fetch(cfg, `/api/v1/scan-executions/${execId}`, { method:"PATCH", body: { status: "completed" } });
@@ -3389,44 +3406,47 @@ END $${tag}$;`;
   const fmtTs = d => d.toISOString().replace('T',' ').slice(0,19);
 
   const sqlLines = [];
+  // v3.3.7: rewritten — this used to UPDATE a pre-existing scan_executions row created via
+  // REST (ex.execId), which never exists on this AA version (confirmed: no REST route creates
+  // executions at all). Also, even when execId did exist, this INSERT never included
+  // scan_target_id, which is a required (NOT NULL) FK to scan_targets — confirmed live schema,
+  // confirmed scan_targets is itself empty until a scan actually runs. Now: one scan_targets
+  // row is created per scan (via a CTE, RETURNING its id), then every execution for that scan —
+  // the "latest" one plus histCount historical clones — references that same target id directly.
   executions.forEach((ex, i) => {
     const prof = scanTypeProfiles[ex.scan_type] || scanTypeProfiles.sync;
     const baseObjs = prof.objectsMin + Math.floor(Math.random() * (prof.objectsMax - prof.objectsMin));
 
-    // The API-created execution becomes "the latest" — 1-3 days ago
     const latestStart = new Date();
     latestStart.setDate(latestStart.getDate() - (1 + Math.floor(Math.random() * 2)));
     latestStart.setHours(6 + (i % 8), Math.floor(Math.random()*60), 0, 0);
     const dur = prof.durationMin + Math.floor(Math.random() * (prof.durationMax - prof.durationMin));
     const latestEnd = new Date(latestStart.getTime() + dur * 1000);
 
-    sqlLines.push(`UPDATE scan_executions SET started_at='${fmtTs(latestStart)}',created_at='${fmtTs(latestStart)}',` +
-      `completed_at='${fmtTs(latestEnd)}',updated_at='${fmtTs(latestEnd)}',` +
-      `total_objects=${baseObjs},completed_objects=${baseObjs} WHERE id='${ex.execId}';`);
+    const rows = [`('${ex.id}','${ex.scan_type}','${ex.source_id}',(SELECT id FROM new_target),'completed','${fmtTs(latestStart)}','${fmtTs(latestEnd)}','${fmtTs(latestStart)}','${fmtTs(latestEnd)}',${baseObjs},${baseObjs},'[]'::jsonb)`];
 
-    // Historical clones — each one scanFreq days older, with gradual object-count growth
     for (let h = 1; h <= histCount; h++) {
       const histStart = new Date(latestStart.getTime() - h * scanFreq * 86400000);
       histStart.setHours(6 + (i % 8), Math.floor(Math.random()*60), 0, 0);
       const histDur = prof.durationMin + Math.floor(Math.random() * (prof.durationMax - prof.durationMin));
       const histEnd = new Date(histStart.getTime() + histDur * 1000);
-      // Older = smaller: ~5% growth per scan period, ±10% noise. Floor at 100.
       const growthFactor = Math.max(0.5, 1 - (h * 0.05));
       const histObjs = Math.max(100, Math.floor(baseObjs * growthFactor * (0.9 + Math.random()*0.2)));
-
-      sqlLines.push(
-        `INSERT INTO scan_executions (id, scan_id, scan_type, source_id, status, started_at, completed_at, created_at, updated_at, total_objects, completed_objects) ` +
-        `SELECT gen_random_uuid(), scan_id, scan_type, source_id, 'completed', ` +
-        `'${fmtTs(histStart)}'::timestamp, '${fmtTs(histEnd)}'::timestamp, ` +
-        `'${fmtTs(histStart)}'::timestamp, '${fmtTs(histEnd)}'::timestamp, ` +
-        `${histObjs}, ${histObjs} ` +
-        `FROM scan_executions WHERE id='${ex.execId}';`
-      );
+      rows.push(`('${ex.id}','${ex.scan_type}','${ex.source_id}',(SELECT id FROM new_target),'completed','${fmtTs(histStart)}','${fmtTs(histEnd)}','${fmtTs(histStart)}','${fmtTs(histEnd)}',${histObjs},${histObjs},'[]'::jsonb)`);
     }
+
+    sqlLines.push(
+      `-- ${ex.name}\n` +
+      `WITH new_target AS (\n` +
+      `  INSERT INTO scan_targets (scan_id, source_id, created_at) VALUES ('${ex.id}','${ex.source_id}',NOW()) RETURNING id\n` +
+      `)\n` +
+      `INSERT INTO scan_executions (scan_id, scan_type, source_id, scan_target_id, status, started_at, completed_at, created_at, updated_at, total_objects, completed_objects, error_details) VALUES\n` +
+      rows.join(",\n") + ";"
+    );
   });
 
-  const totalNewRows = executions.length * histCount;
-  const execSQL = `-- Backdating ${executions.length} latest executions + cloning ${totalNewRows} historical executions\n` + sqlLines.join("\n");
+  const totalNewRows = executions.length * (histCount + 1);
+  const execSQL = `-- Creating scan_targets + ${totalNewRows} scan_executions (1 latest + ${histCount} historical clones each) for ${executions.length} scans\n` + sqlLines.join("\n");
 
   // v3.0.3: MIP SQL runs in its OWN transaction AFTER the main one commits.
   // This guarantees that any failure (unknown column, FK violation, anything) cannot
@@ -3679,8 +3699,10 @@ function aa26ConfigPlan(cfg) {
     scans: [
       { name: `CloudLab AD - ${firstAdHost} - Identity Sync`, scan_type: "sync", sourceName: `CloudLab AD - ${firstAdHost}` },
       { name: `${domain} Entra ID - Sync`, scan_type: "sync", sourceName: `${domain} Entra ID` },
-      { name: `Windows FS - ${firstFsHost} - Sync`, scan_type: "sync", sourceName: `Windows FS - ${firstFsHost}` },
-      { name: `Windows FS — Local Users & Groups - Sync`, scan_type: "sync", sourceName: `Windows FS — Local Users & Groups` },
+      // v3.3.4: removed both file-server "Sync" scans — "sync" is an identity-source concept
+      // (AD/Entra), file servers don't have identities to sync. Confirmed live: this AA version
+      // rejects scanType:"sync" for a file-server source with HTTP 422 VALIDATION_ERROR. Access
+      // Scan + Sensitive Data Scan below are the real file-server scan types and already work.
       { name: `Windows FS - ${firstFsHost} - Access Scan`, scan_type: "access_scan", sourceName: `Windows FS - ${firstFsHost}` },
       { name: `Windows FS - ${firstFsHost} - Sensitive Data Scan`, scan_type: "sensitive_data_scan", sourceName: `Windows FS - ${firstFsHost}` },
       { name: `${domain} SPO - Access Scan`, scan_type: "access_scan", sourceName: `${domain} SPO` },
@@ -3747,7 +3769,12 @@ async function aa26RunFullConfig(cfg, log) {
     if (!sourceTypeId) { log(`  ⊘ Source "${src.name}": source type "${src.sourceTypeKey}" not available via API in this environment — skipping (not an error, just not creatable this way)`); continue; }
     const payload = { name: src.name, sourceTypeId, serviceAccountId: saId, connectionParameters: src.connectionParameters };
     const r = await aa26CreateSource(cfg, payload);
-    if (r.ok) { srcNameToId[src.name] = r.body.id; createdIds.sourceIds.push(r.body.id); log(`  ✓ Created "${src.name}" (${r.body.id})`); stats.srcCreated++; }
+    if (r.ok) {
+      const srcId = r.body?.id || r.body?.data?.id;
+      if (!srcId) { log(`  ⚠ Created "${src.name}" but couldn't find its ID in the response — Phase 3 (Scans) will treat it as missing. Raw response: ${JSON.stringify(r.body).slice(0,200)}`); }
+      else { srcNameToId[src.name] = srcId; createdIds.sourceIds.push(srcId); log(`  ✓ Created "${src.name}" (${srcId})`); }
+      stats.srcCreated++;
+    }
     else { log(`  ✗ Failed "${src.name}": HTTP ${r.status} — ${JSON.stringify(r.body).slice(0,180)}`); stats.errors++; }
   }
   stats.phase2Ms = Date.now() - phase2Start;
@@ -3760,8 +3787,20 @@ async function aa26RunFullConfig(cfg, log) {
   existingScans.forEach(s => { scanByName[s.name] = s; });
   const createdScanIds = [];
   for (const scn of plan.scans) {
-    if (scanByName[scn.name]) { log(`  ⊘ Scan "${scn.name}" exists`); stats.scnSkipped++; createdScanIds.push({id: scanByName[scn.name].id, name: scn.name, scan_type: scn.scan_type}); continue; }
     const srcId = srcNameToId[scn.sourceName];
+    if (scanByName[scn.name]) {
+      const existingScan = scanByName[scn.name];
+      const existingId = existingScan.id || existingScan.data?.id || existingScan.scanId || existingScan.data?.scanId;
+      if (!existingId) {
+        log(`  ⊘ Scan "${scn.name}" exists but couldn't find its ID in the list response (checked id, data.id, scanId, data.scanId) — skipping its execution in Phase 4. Raw object: ${JSON.stringify(existingScan).slice(0,200)}`);
+      } else if (!srcId) {
+        log(`  ⊘ Scan "${scn.name}" exists (${existingId}) but missing source "${scn.sourceName}" — skipping its execution in Phase 4`);
+      } else {
+        log(`  ⊘ Scan "${scn.name}" exists (${existingId})`);
+        createdScanIds.push({id: existingId, source_id: srcId, name: scn.name, scan_type: scn.scan_type});
+      }
+      stats.scnSkipped++; continue;
+    }
     if (!srcId) { log(`  ✗ Scan "${scn.name}": missing source "${scn.sourceName}"`); stats.errors++; continue; }
     // v3.1.2: Scan API rewritten to camelCase — source_id became target:{mode,sourceIds:[]},
     // and the cron_expression/cron_time_zone fields are dropped entirely (not just empty)
@@ -3776,7 +3815,22 @@ async function aa26RunFullConfig(cfg, log) {
       cronEnabled: false,
     };
     const r = await aa26CreateScan(cfg, payload);
-    if (r.ok) { log(`  ✓ Created "${scn.name}" (${r.body.id})`); stats.scnCreated++; createdScanIds.push({id: r.body.id, name: scn.name, scan_type: scn.scan_type}); }
+    if (r.ok) {
+      // v3.3.4: Sources' POST response has a flat r.body.id and that's always worked — but
+      // Scans' POST response does NOT, confirmed live (every created scan logged "(undefined)"
+      // and every dependent execution then 404'd on an effectively-empty body, since
+      // JSON.stringify drops an undefined field). Same code pattern, different API shape —
+      // try every plausible location rather than assume one, and never silently push undefined
+      // forward into Phase 4 again.
+      const scanId = r.body?.scan?.id || r.body?.id || r.body?.data?.id || r.body?.scanId || r.body?.data?.scanId;
+      if (!scanId) {
+        log(`  ⚠ Created "${scn.name}" but couldn't find its ID in the response (checked id, data.id, scanId, data.scanId) — skipping its execution in Phase 4 rather than guessing. Raw response: ${JSON.stringify(r.body).slice(0,200)}`);
+        stats.scnCreated++;
+      } else {
+        log(`  ✓ Created "${scn.name}" (${scanId})`); stats.scnCreated++;
+        createdScanIds.push({id: scanId, source_id: srcId, name: scn.name, scan_type: scn.scan_type});
+      }
+    }
     else { log(`  ✗ Failed "${scn.name}": HTTP ${r.status} — ${JSON.stringify(r.body).slice(0,180)}`); stats.errors++; }
   }
 
@@ -3786,22 +3840,19 @@ async function aa26RunFullConfig(cfg, log) {
   // Status transitions: pending -> running -> completed (validated).
   // v3.0.9: Time Phase 4 (Scan Executions) — N API calls × 3 state transitions each
   const phase4Start = Date.now();
-  log(`→ Phase 4/5: Scan Executions (${createdScanIds.length} simulated)`);
-  stats.execCreated = 0;
-  const newExecs = []; // Track newly created execution IDs for Phase 5
-  for (const s of createdScanIds) {
-    // v3.0.1: ALWAYS create a new execution on each orchestrator run.
-    // Previously skipped if executions existed — but that prevented accumulating history
-    // across multiple runs. Now each run adds 1 new "today" execution + N historical clones
-    // (added by Phase 5 SQL), so re-running the orchestrator grows the timeline naturally.
-    const existingExecs = await aa26GetScanExecutions(cfg, s.id);
-    if (existingExecs.length > 0) log(`  ℹ "${s.name}" has ${existingExecs.length} existing — adding new execution on top`);
-    const r = await aa26SimulateExecution(cfg, s.id, s.scan_type);
-    if (r.ok) { log(`  ✓ Execution for "${s.name}" (${r.execId})`); stats.execCreated++; newExecs.push({execId:r.execId, name:s.name, scan_type:s.scan_type}); }
-    else { log(`  ✗ Execution for "${s.name}": ${r.error}`); stats.errors++; }
-  }
+  log(`→ Phase 4/5: Scan Executions (${createdScanIds.length} via Postgres SQL)`);
+  // v3.3.7: confirmed live (multiple payload/path/method variations, including OPTIONS
+  // returning 404 with no Allow header) that this AA version has no REST route for creating
+  // scan-executions at all — not flaky, absent. Treating this the same way MIP labels and
+  // source-group linking already are: skip the doomed REST attempt entirely and hand every
+  // scan straight to Phase 5, which creates the real scan_targets + scan_executions rows via
+  // the generated Postgres SQL (confirmed schema: scan_executions.scan_target_id is a required
+  // FK to scan_targets, which is itself empty until a scan actually runs — so Phase 5 creates
+  // both, chained via a CTE, rather than assuming either already exists).
+  const newExecs = createdScanIds.map(s => ({id: s.id, source_id: s.source_id, name: s.name, scan_type: s.scan_type}));
+  log(`  ℹ ${newExecs.length} scan(s) queued for Phase 5 — Scan Executions page populates once that SQL runs on the AA server`);
   stats.phase4Ms = Date.now() - phase4Start;
-  log(`  ⏱ Phase 4 completed in ${fmtPhaseDuration(stats.phase4Ms)} (${stats.execCreated} executions created)`);
+  log(`  ⏱ Phase 4 completed in ${fmtPhaseDuration(stats.phase4Ms)} (0 via REST — expected; see Phase 5)`);
 
   // ── Phase 6 (v3.0.7): MIP Labels — multi-tenant support
   // Real AA26 pulls labels from a connected Entra tenant via Microsoft Graph. For demo
