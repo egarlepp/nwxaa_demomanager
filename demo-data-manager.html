@@ -17,14 +17,15 @@ const {useState, useCallback, useEffect} = React;
 
 
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.3.14";
+const APP_VERSION = "3.3.15";
 // v3.2.0: the AA26 product version this build was actually validated against. Compared live
 // against the connected instance's real version (read via /api/v1/source-types) so a mismatch
 // gets flagged before it causes confusing data-injection failures.
 // v3.3.2: list, not a single string — v1.1.6 confirmed compatible via live schema-diff (zero
 // drift across all 13 hardcoded-column tables), so it's added alongside 1.1.5 rather than
 // replacing it. A straight swap would've made a real v1.1.5 connection show a false mismatch.
-const AA26_SUPPORTED_VERSIONS = ["1.1.5", "1.1.6"];
+// v3.3.15: 1.1.7 added as the latest supported version.
+const AA26_SUPPORTED_VERSIONS = ["1.1.5", "1.1.6", "1.1.7"];
 const themes = {
   dark: {
     bg: "bg-slate-950", bgCard: "bg-slate-900/70", bgInput: "bg-slate-800/80", bgHover: "hover:bg-slate-800",
