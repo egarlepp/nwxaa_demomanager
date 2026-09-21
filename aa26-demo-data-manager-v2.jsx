@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 
 
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.3.12";
+const APP_VERSION = "3.3.13";
 // v3.2.0: the AA26 product version this build was actually validated against. Compared live
 // against the connected instance's real version (read via /api/v1/source-types) so a mismatch
 // gets flagged before it causes confusing data-injection failures.
@@ -3444,12 +3444,24 @@ END $${tag}$;`;
   const totalNewRows = executions.length * (histCount + 1);
   const execSQL = `-- Creating scan_targets + ${totalNewRows} scan_executions (1 latest + ${histCount} historical clones each) for ${executions.length} scans\n` + sqlLines.join("\n");
 
-  // v3.0.3: MIP SQL runs in its OWN transaction AFTER the main one commits.
+  // v3.3.13: confirmed live on aa26testing — this AA version's Postgres schema has no
+  // source_groups table at all (`\dt` listed all 39 tables in the database; source_groups
+  // isn't one of them). sgSQL and execSQL used to share one transaction, so that single
+  // missing-relation error aborted BOTH — scan_targets/scan_executions (which that same table
+  // listing confirms DO exist: sources, scans, scan_targets, scan_executions are all there)
+  // never got a chance to run, purely as collateral damage from an unrelated feature this AA
+  // version apparently doesn't have. Split into its own transaction, same isolation MIP labels
+  // already had below — a source_groups failure now can't block the scan history this whole
+  // Phase exists to populate. Left sgSQL's own statements as-is (not schema-checked or removed)
+  // since this is unconfirmed for the other officially-supported version (1.1.5) — it may still
+  // work there.
+  const sgTxn = `BEGIN;\n${sgSQL}\nCOMMIT;`;
+  const execTxn = `BEGIN;\n${execSQL}\nCOMMIT;`;
+  // v3.0.3: MIP SQL runs in its OWN transaction too, after the others commit.
   // This guarantees that any failure (unknown column, FK violation, anything) cannot
   // roll back the source group inserts or scan execution UPDATEs (the 0-objects bug from v3.0.2).
-  const mainTxn = `BEGIN;\n${sgSQL}\n${execSQL}\nCOMMIT;`;
-  const mipTxn = mipSQL ? `\n-- MIP Labels in a separate transaction so failure here cannot affect the main work above\nBEGIN;\n${mipSQL}\nCOMMIT;` : "";
-  const sql = mainTxn + mipTxn;
+  const mipTxn = mipSQL ? `\n-- MIP Labels in a separate transaction so failure here cannot affect the work above\nBEGIN;\n${mipSQL}\nCOMMIT;` : "";
+  const sql = `${sgTxn}\n${execTxn}${mipTxn}`;
   const cmd = `kubectl exec -i postgres-0 -n access-analyzer -- psql -U postgres -d access_analyzer << 'EOSQL'\n${sql}\nEOSQL`;
   return {
     sql, cmd,
@@ -5571,8 +5583,10 @@ echo "Refresh the AA dashboards to see the data."
 # Creates source groups in Postgres and links them to sources (the REST API
 # cannot do this), backdates scan execution timestamps with realistic
 # durations, sets object counts per scan type, and inserts synthetic MIP
-# labels. Run on the AA server (requires kubectl access to the
-# access-analyzer namespace).
+# labels. Each of these is its own Postgres transaction (v3.3.13), so one
+# failing — e.g. source_groups, which doesn't exist on every AA version —
+# can't block the others. Run on the AA server (requires kubectl access to
+# the access-analyzer namespace).
 #
 # Usage: bash aa-post-setup-${cfg.global.domainName.toLowerCase()}.sh
 
@@ -5581,10 +5595,25 @@ echo "AA Post-Setup SQL — ${cfg.global.domainName}"
 echo "================================================"
 echo ""
 
+# v3.3.13: NOT using psql's -v ON_ERROR_STOP=1 here on purpose — that would abort the whole
+# script at the FIRST error across every transaction in it, undoing the point of splitting
+# source_groups/scan_targets/scan_executions/MIP into independent transactions above. Instead,
+# capture the real output and check it for ERROR lines afterward, so a failure in one
+# transaction is reported honestly without blocking the others from running.
+# The command ends in a heredoc whose terminator (EOSQL) must be alone on its own line, so
+# it's on its own line here too, with the group's closing "} 2>&1)" on the line after it —
+# not appended directly, which would break the terminator match and make bash read the rest
+# of this script as SQL input instead of ending the heredoc.
+OUTPUT=$({
 ${aa26PostSetupCmd}
-
+} 2>&1)
+echo "$OUTPUT"
 echo ""
-echo "Post-setup complete. Click 'Verify Now' in the app to confirm it landed."
+if echo "$OUTPUT" | grep -q "^ERROR:"; then
+  echo "⚠ Completed with errors — see ERROR lines above. Not everything necessarily applied; re-check before assuming this fully landed."
+else
+  echo "✓ Post-setup complete with no errors. Click 'Verify Now' in the app to confirm it landed."
+fi
 `;
     const b=new Blob([script],{type:"text/x-shellscript"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`aa-post-setup-${cfg.global.domainName.toLowerCase()}.sh`;a.click();};
   return <div className="space-y-5">
@@ -6066,7 +6095,7 @@ echo "Post-setup complete. Click 'Verify Now' in the app to confirm it landed."
               </div>
             </div>
             <div className={cn("text-[10px] mb-2 space-y-1",t.textFaint)}>
-              <p><b>What this does:</b> Creates source groups in Postgres and links them to sources (the REST API cannot do this), backdates scan execution timestamps to 3 weeks ago with realistic durations, and sets object counts (600-6,000) per scan type.</p>
+              <p><b>What this does:</b> Creates source groups in Postgres and links them to sources (the REST API cannot do this), backdates scan execution timestamps to 3 weeks ago with realistic durations, and sets object counts (600-6,000) per scan type. Each part runs in its own transaction — if your AA version doesn't have the <code className={cn("px-1 rounded",t.codeBlock)}>source_groups</code> table (confirmed absent on some installs), that part fails cleanly without blocking the scan execution history.</p>
               <p><b>How to run (recommended):</b> 1) Click "Download Script" above. 2) Copy the .sh file to the AA server (<code className={cn("px-1 rounded",t.codeBlock)}>scp aa-post-setup-*.sh sysadmin@appaa:~/</code>). 3) SSH in and run <code className={cn("px-1 rounded",t.codeBlock)}>bash aa-post-setup-*.sh</code>. Confirmed live: pasting this command directly into an interactive SSH session can corrupt on the way in for a paste this large (a stray terminator or a later line landing mid-statement) — bash reading it from a real file sidesteps that entirely.</p>
               <p><b>Copy to Clipboard</b> is still here for pasting into an editor or a short remote session, but isn't the recommended path for running it directly anymore.</p>
               <p><b>When to re-run:</b> Only after a fresh "Configure AA" run. Each run generates new UUIDs — always use the latest command.</p>
