@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 
 
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.3.7";
+const APP_VERSION = "3.3.8";
 // v3.2.0: the AA26 product version this build was actually validated against. Compared live
 // against the connected instance's real version (read via /api/v1/source-types) so a mismatch
 // gets flagged before it causes confusing data-injection failures.
@@ -3400,6 +3400,14 @@ END $${tag}$;`;
   // confirmed scan_targets is itself empty until a scan actually runs. Now: one scan_targets
   // row is created per scan (via a CTE, RETURNING its id), then every execution for that scan —
   // the "latest" one plus histCount historical clones — references that same target id directly.
+  // v3.3.8: the scan_targets INSERT below had no ON CONFLICT — confirmed live: uq_scan_targets_scan_source
+  // (scan_id, source_id) already existed on a re-run (this SQL run twice, or Configure AA run again without
+  // a full wipe), which aborted the WHOLE transaction, not just that one scan — every scan in the batch
+  // rolled back. Same class of bug the source-group SQL (NOT EXISTS guard) and MIP SQL (ON CONFLICT DO
+  // UPDATE) above already avoid; scan_targets was the one spot this pass missed. Fixed the same way as MIP:
+  // DO UPDATE on a no-op column so RETURNING id always yields a row — DO NOTHING would silently return zero
+  // rows here, which would NULL out scan_target_id downstream (a NOT NULL column), trading one hard failure
+  // for a worse one.
   executions.forEach((ex, i) => {
     const prof = scanTypeProfiles[ex.scan_type] || scanTypeProfiles.sync;
     const baseObjs = prof.objectsMin + Math.floor(Math.random() * (prof.objectsMax - prof.objectsMin));
@@ -3425,7 +3433,8 @@ END $${tag}$;`;
     sqlLines.push(
       `-- ${ex.name}\n` +
       `WITH new_target AS (\n` +
-      `  INSERT INTO scan_targets (scan_id, source_id, created_at) VALUES ('${ex.id}','${ex.source_id}',NOW()) RETURNING id\n` +
+      `  INSERT INTO scan_targets (scan_id, source_id, created_at) VALUES ('${ex.id}','${ex.source_id}',NOW())\n` +
+      `  ON CONFLICT (scan_id, source_id) DO UPDATE SET created_at = scan_targets.created_at RETURNING id\n` +
       `)\n` +
       `INSERT INTO scan_executions (scan_id, scan_type, source_id, scan_target_id, status, started_at, completed_at, created_at, updated_at, total_objects, completed_objects, error_details) VALUES\n` +
       rows.join(",\n") + ";"
