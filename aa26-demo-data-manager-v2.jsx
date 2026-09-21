@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 
 
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.3.9";
+const APP_VERSION = "3.3.10";
 // v3.2.0: the AA26 product version this build was actually validated against. Compared live
 // against the connected instance's real version (read via /api/v1/source-types) so a mismatch
 // gets flagged before it causes confusing data-injection failures.
@@ -6445,7 +6445,8 @@ export default function App(){
               <div className={cn("text-[10px] uppercase tracking-[0.15em] flex items-center gap-1.5",t.textFaint)}>
                 <span>Netwrix Access Analyzer <span className={cn("ml-1",t.textMuted)}>v{APP_VERSION}</span></span>
                 <span className={t.textFaint}>·</span>
-                <span title="AA product versions this build was validated against">Supports AA v{AA26_SUPPORTED_VERSIONS.join(', v')}</span>
+                <span>Supports AA up to v{AA26_SUPPORTED_VERSIONS[AA26_SUPPORTED_VERSIONS.length-1]}</span>
+                <HelpIcon text="May support newer versions based on schema/feature changes. Review audit and log for errors." t={t}/>
                 {cfg.connection.aa26LiveVersion && (
                   AA26_SUPPORTED_VERSIONS.includes(cfg.connection.aa26LiveVersion)
                     ? <span className={cn("normal-case tracking-normal px-1.5 py-0.5 rounded border",t.successBg,t.success)} title="Connected AA version matches">✓ v{cfg.connection.aa26LiveVersion} connected</span>
