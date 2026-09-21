@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 
 
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.3.13";
+const APP_VERSION = "3.3.14";
 // v3.2.0: the AA26 product version this build was actually validated against. Compared live
 // against the connected instance's real version (read via /api/v1/source-types) so a mismatch
 // gets flagged before it causes confusing data-injection failures.
@@ -3279,30 +3279,33 @@ async function aa26GetScanExecutions(cfg, scanId) {
 async function aa26DeleteScanExecution(cfg, id) { return await aa26Fetch(cfg, `/api/v1/scan-executions/${id}`, {method:"DELETE"}); }
 async function aa26DeleteScan(cfg, id) { return await aa26Fetch(cfg, `/api/v1/scans/${id}`, {method:"DELETE"}); }
 async function aa26DeleteSource(cfg, id) { return await aa26Fetch(cfg, `/api/v1/sources/${id}`, {method:"DELETE"}); }
-async function aa26DeleteSourceGroup(cfg, id) { return await aa26Fetch(cfg, `/api/v1/source-groups/${id}`, {method:"DELETE"}); }
+// v3.3.14: aa26DeleteSourceGroup removed — /api/v1/source-groups confirmed 404 on this AA
+// version (see aa26GeneratePostSetupSQL's comment), so it had no caller left.
 async function aa26DeleteServiceAccount(cfg, id) { return await aa26Fetch(cfg, `/api/v1/service-accounts/${id}`, {method:"DELETE"}); }
 
 // ── AA26 Config: Generate post-setup SQL command for Postgres fixup
 // Dynamically builds kubectl one-liner using real UUIDs from the orchestrator run.
-function aa26GeneratePostSetupSQL(sourceNames, executions, cfg, mipLabelData) {
-  // Part 1: Create source groups and link sources
-  const sgSQL = sourceNames.map(name =>
-    `INSERT INTO source_groups (id,name,description,max_concurrent_scans,status,service_account_id,source_type_id,created_at,updated_at) ` +
-    `SELECT gen_random_uuid(),'${name}','Demo source group',1,'active',s.service_account_id,s.source_type_id,s.created_at,s.created_at ` +
-    `FROM sources s WHERE s.name='${name}' AND NOT EXISTS (SELECT 1 FROM source_groups sg WHERE sg.name='${name}');\n` +
-    `UPDATE sources SET source_group_id=sg.id FROM source_groups sg WHERE sources.name='${name}' AND sg.name='${name}' AND sources.source_group_id IS NULL;`
-  ).join("\n");
-
+// v3.3.14: removed the source-groups SQL entirely (was Part 1 here) — confirmed live on
+// aa26testing that it's not a Postgres-vs-REST question at all, it's gone on both sides:
+// `\dt` showed no source_groups table (v3.3.13), and GET/OPTIONS against
+// /api/v1/source-groups both came back 404 (Allow: null on OPTIONS — no route exists to
+// discover, the same strongest-signal check used to confirm scan-execution creation was
+// absent back in v3.3.6). A real source object from this AA version does carry a `labels`
+// array now (matching the live `labels`/`source_labels` tables), suggesting this concept
+// was replaced by a general tagging system rather than 1:1 renamed — but that's a
+// different feature to build, not a fix to this one, so left for a future session to
+// pick up deliberately rather than guessed at here.
+function aa26GeneratePostSetupSQL(executions, cfg, mipLabelData) {
   // Part 1b: v3.0.3 — MIP Labels (synthetic insertion for demo purposes)
   // Real AA26 pulls these from a connected Entra tenant via Microsoft Graph.
   // For the demo we INSERT them directly with deterministic UUIDs so the REST PUT
   // (done in Phase 6 of the orchestrator) can reference them.
   //
-  // CRITICAL: The MIP SQL is wrapped in its own SAVEPOINT inside the main transaction
-  // so that ANY failure here (unknown column, FK violation, constraint, etc.) only
-  // rolls back the MIP insert — NOT the source group inserts or scan execution UPDATEs.
-  // Without this savepoint, a MIP error would cause executions to keep their API-default
-  // 0 object counts (bug observed in v3.0.2).
+  // CRITICAL: MIP SQL runs in its own transaction (see mipTxn below), separate from
+  // execTxn, so ANY failure here (unknown column, FK violation, constraint, etc.) only
+  // rolls back the MIP insert — NOT the scan_targets/scan_executions work. Without that
+  // separation, a MIP error would cause executions to keep their API-default 0 object
+  // counts (bug observed in v3.0.2).
   let mipSQL = "";
   if (mipLabelData && Array.isArray(mipLabelData.sources) && mipLabelData.sources.length > 0) {
     const tenantBlocks = mipLabelData.sources.map((src, idx) => {
@@ -3444,24 +3447,12 @@ END $${tag}$;`;
   const totalNewRows = executions.length * (histCount + 1);
   const execSQL = `-- Creating scan_targets + ${totalNewRows} scan_executions (1 latest + ${histCount} historical clones each) for ${executions.length} scans\n` + sqlLines.join("\n");
 
-  // v3.3.13: confirmed live on aa26testing — this AA version's Postgres schema has no
-  // source_groups table at all (`\dt` listed all 39 tables in the database; source_groups
-  // isn't one of them). sgSQL and execSQL used to share one transaction, so that single
-  // missing-relation error aborted BOTH — scan_targets/scan_executions (which that same table
-  // listing confirms DO exist: sources, scans, scan_targets, scan_executions are all there)
-  // never got a chance to run, purely as collateral damage from an unrelated feature this AA
-  // version apparently doesn't have. Split into its own transaction, same isolation MIP labels
-  // already had below — a source_groups failure now can't block the scan history this whole
-  // Phase exists to populate. Left sgSQL's own statements as-is (not schema-checked or removed)
-  // since this is unconfirmed for the other officially-supported version (1.1.5) — it may still
-  // work there.
-  const sgTxn = `BEGIN;\n${sgSQL}\nCOMMIT;`;
   const execTxn = `BEGIN;\n${execSQL}\nCOMMIT;`;
-  // v3.0.3: MIP SQL runs in its OWN transaction too, after the others commit.
+  // v3.0.3: MIP SQL runs in its OWN transaction too, after execTxn commits.
   // This guarantees that any failure (unknown column, FK violation, anything) cannot
-  // roll back the source group inserts or scan execution UPDATEs (the 0-objects bug from v3.0.2).
+  // roll back the scan_targets/scan_executions work (the 0-objects bug from v3.0.2).
   const mipTxn = mipSQL ? `\n-- MIP Labels in a separate transaction so failure here cannot affect the work above\nBEGIN;\n${mipSQL}\nCOMMIT;` : "";
-  const sql = `${sgTxn}\n${execTxn}${mipTxn}`;
+  const sql = `${execTxn}${mipTxn}`;
   const cmd = `kubectl exec -i postgres-0 -n access-analyzer -- psql -U postgres -d access_analyzer << 'EOSQL'\n${sql}\nEOSQL`;
   return {
     sql, cmd,
@@ -3477,7 +3468,7 @@ END $${tag}$;`;
 }
 
 // ── AA26 Config: Wipe configuration (reverse dependency order)
-// mode="demo" — only items matching config plan names + any source groups with matching names
+// mode="demo" — only items matching config plan names
 // mode="all"  — ALL configuration content (complete clean slate, preserves service accounts only)
 async function aa26WipeConfig(cfg, log, mode="demo") {
   const plan = aa26ConfigPlan(cfg);
@@ -3523,7 +3514,7 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   // Three-layer predicate: tracked ID (precise) > exact name (current cfg) > pattern (legacy + customized)
   const isDemoSource = (s) => trackedSourceIds.has(s.id) || demoSourceNames.has(s.name) || DEMO_SOURCE_PATTERNS.some(p => p.test(s.name));
   const isDemoScan = (s) => trackedScanIds.has(s.id) || demoScanNames.has(s.name) || DEMO_SCAN_PATTERNS.some(p => p.test(s.name));
-  const stats = { execDel:0, scanDel:0, srcDel:0, sgDel:0, errors:0, trackedSrcUsed:0, trackedScanUsed:0 };
+  const stats = { execDel:0, scanDel:0, srcDel:0, errors:0, trackedSrcUsed:0, trackedScanUsed:0 };
   const isAll = mode === "all";
   log(isAll ? "Mode: FULL — wiping ALL configuration content" : `Mode: DEMO — identifying via ${trackedSourceIds.size} tracked source IDs + name patterns (region/hostname-resilient)`);
 
@@ -3558,20 +3549,12 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
     else { log(`  ✗ Failed to delete source "${src.name}": HTTP ${r.status}`); stats.errors++; }
   }
 
-  // Phase 4: Delete source groups
-  log("→ Wiping source groups...");
-  const sgResp = await aa26Fetch(cfg, "/api/v1/source-groups?per_page=100");
-  const allSGs = sgResp.ok ? (sgResp.body.data || []) : [];
-  const targetSGs = isAll ? allSGs : allSGs.filter(sg => isDemoSource(sg) || isDemoScan(sg));
-  for (const sg of targetSGs) {
-    const r = await aa26DeleteSourceGroup(cfg, sg.id);
-    if (r.ok || r.status === 204) { log(`  ✓ Deleted source group "${sg.name}"`); stats.sgDel++; }
-    else if (r.status === 409) { log(`  ⊘ Source group "${sg.name}" has dependencies — may need sources deleted first`); stats.errors++; }
-    else { log(`  ✗ Failed to delete source group "${sg.name}": HTTP ${r.status}`); stats.errors++; }
-  }
-
+  // v3.3.14: Phase 4 ("Delete source groups") removed — confirmed live that
+  // /api/v1/source-groups 404s on this AA version, so this was always a no-op wipe of an
+  // always-empty list (aa26Fetch failing silently open). See aa26GeneratePostSetupSQL's
+  // comment for the full investigation.
   log("");
-  // Phase 5: Delete service accounts (Full Reset only)
+  // Phase 4: Delete service accounts (Full Reset only)
   stats.saDel = 0;
   if (isAll) {
     log("→ Wiping service accounts...");
@@ -3638,7 +3621,7 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   }
 
   log("");
-  log(`Done. Deleted: ${stats.execDel} executions, ${stats.scanDel} scans, ${stats.srcDel} sources, ${stats.sgDel} source groups${isAll?`, ${stats.saDel} service accounts`:""}`);
+  log(`Done. Deleted: ${stats.execDel} executions, ${stats.scanDel} scans, ${stats.srcDel} sources${isAll?`, ${stats.saDel} service accounts`:""}`);
   if (stats.mipReset) log(`      MIP config reset via REST. Run the kubectl command below to also clear ${isAll?"all":"demo"} MIP labels.`);
   if (!isAll) log("Note: Service accounts preserved in Demo mode. Use Full Reset to remove them.");
   if (stats.errors > 0) log(`⚠ ${stats.errors} errors — review log above`);
@@ -3765,7 +3748,7 @@ async function aa26RunFullConfig(cfg, log) {
   // ── Sources
   // v3.0.9: Time Phase 2 (Sources) — typically the slowest phase along with Phase 4
   const phase2Start = Date.now();
-  log(`→ Phase 2/5: Source Groups (${plan.sources.length})`);
+  log(`→ Phase 2/5: Sources (${plan.sources.length})`);
   const existingSrcs = await aa26GetSources(cfg);
   const srcNameToId = {};
   existingSrcs.forEach(s => { srcNameToId[s.name] = s.id; });
@@ -3950,17 +3933,18 @@ async function aa26RunFullConfig(cfg, log) {
     }
   }
 
-  // ── Phase 5: Generate post-setup SQL command (source groups + timestamp fixup + multi-execution history + MIP labels)
-  // The AA26 REST API cannot link sources to source groups, backdate timestamps, insert multiple executions, or insert MIP labels.
+  // ── Phase 5: Generate post-setup SQL command (timestamp fixup + multi-execution history + MIP labels)
+  // The AA26 REST API cannot backdate timestamps, insert multiple executions, or insert MIP labels.
   // This generates a kubectl command the user runs on the AA26 server.
-  const sourceNamesForGroups = plan.sources.map(s => s.name);
-  if (newExecs.length > 0 || sourceNamesForGroups.length > 0 || mipLabelData) {
-    const {cmd, summary} = aa26GeneratePostSetupSQL(sourceNamesForGroups, newExecs, cfg, mipLabelData);
+  // v3.3.14: no longer generates source-groups SQL — confirmed live (both no Postgres
+  // source_groups table and a 404 on /api/v1/source-groups) that this AA version has
+  // nothing for it to link to. See the comment above aa26GeneratePostSetupSQL.
+  if (newExecs.length > 0 || mipLabelData) {
+    const {cmd, summary} = aa26GeneratePostSetupSQL(newExecs, cfg, mipLabelData);
     stats.postSetupCmd = cmd;
     log(``);
     log(`→ Phase 5/5: Post-Setup SQL (copy to AA server)`);
     log(`  Generated kubectl command to:`);
-    if (sourceNamesForGroups.length > 0) log(`    • Create ${sourceNamesForGroups.length} source groups + link sources`);
     if (newExecs.length > 0) {
       log(`    • Backdate ${summary.latestUpdated} latest scan executions (positions them as "today")`);
       log(`    • Insert ${summary.historicalAdded} historical execution clones spread over ${summary.historyDays} days`);
@@ -5580,13 +5564,11 @@ echo "Refresh the AA dashboards to see the data."
 # AA Post-Setup SQL — Generated ${new Date().toISOString()}
 # Organization: ${cfg.global.domainName}
 #
-# Creates source groups in Postgres and links them to sources (the REST API
-# cannot do this), backdates scan execution timestamps with realistic
-# durations, sets object counts per scan type, and inserts synthetic MIP
-# labels. Each of these is its own Postgres transaction (v3.3.13), so one
-# failing — e.g. source_groups, which doesn't exist on every AA version —
-# can't block the others. Run on the AA server (requires kubectl access to
-# the access-analyzer namespace).
+# Backdates scan execution timestamps with realistic durations, sets object
+# counts per scan type, and inserts synthetic MIP labels where applicable —
+# none of which the REST API can do directly. Each part is its own Postgres
+# transaction, so one failing can't block the others. Run on the AA server
+# (requires kubectl access to the access-analyzer namespace).
 #
 # Usage: bash aa-post-setup-${cfg.global.domainName.toLowerCase()}.sh
 
@@ -5597,7 +5579,7 @@ echo ""
 
 # v3.3.13: NOT using psql's -v ON_ERROR_STOP=1 here on purpose — that would abort the whole
 # script at the FIRST error across every transaction in it, undoing the point of splitting
-# source_groups/scan_targets/scan_executions/MIP into independent transactions above. Instead,
+# scan_targets/scan_executions and MIP into independent transactions. Instead,
 # capture the real output and check it for ERROR lines afterward, so a failure in one
 # transaction is reported honestly without blocking the others from running.
 # The command ends in a heredoc whose terminator (EOSQL) must be alone on its own line, so
@@ -5683,7 +5665,7 @@ fi
               </label>
               <label className={cn("text-xs flex items-center gap-1.5 cursor-pointer",aa26WipeMode==="all"?t.text:t.textFaint)}>
                 <input type="radio" name="wipeMode" value="all" checked={aa26WipeMode==="all"} onChange={()=>setAa26WipeMode("all")} className="accent-red-500"/>
-                <span><b>Full Reset</b> — ALL source groups, sources, scans, executions & service accounts</span>
+                <span><b>Full Reset</b> — ALL sources, scans, executions & service accounts</span>
               </label>
             </div>
             <p className={cn("text-[10px]",t.textFaint)}>{aa26WipeMode==="all"?"Deletes ALL configuration content including service accounts for a completely clean slate.":`Deletes items identified by (a) ${(cfg.history?.injectedAA26?.sourceIds||[]).length} tracked source IDs from prior inject runs, (b) current cfg's expected names, (c) standard demo name patterns across any region/vertical. Service accounts preserved.`}</p>
@@ -5696,7 +5678,6 @@ fi
                 <li>All Scan Executions</li>
                 <li>All Scans</li>
                 <li>All Sources</li>
-                <li>All Source Groups</li>
                 {aa26WipeMode==="all"&&<li className="text-red-400 font-semibold">All Service Accounts (Full Reset only)</li>}
               </ul>
               <p className={cn("text-xs mb-4 italic",t.textFaint)}>{aa26WipeMode==="all"?"Service accounts will need to be recreated. Use this for a completely clean slate.":"Service accounts will be preserved. Items matching the current config plan (domain: "+(cfg.global?.domainName||"demo")+") will be removed."}</p>
@@ -5960,7 +5941,7 @@ fi
           <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.successBg,t.success)}>2/5</span><span className={cn("text-xs font-semibold",t.text)}>Sources (5)</span><span className={cn("text-xs",t.textFaint)}>CloudLab AD, Windows FS, LUG, Entra ID, SharePoint</span></div>
           <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.successBg,t.success)}>3/5</span><span className={cn("text-xs font-semibold",t.text)}>Scans (8)</span><span className={cn("text-xs",t.textFaint)}>AD/Entra/FS/LUG Sync, FS+SPO Access & Sensitive Data — cronEnabled:false</span></div>
           <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.successBg,t.success)}>4/5</span><span className={cn("text-xs font-semibold",t.text)}>Scan Executions (8)</span><span className={cn("text-xs",t.textFaint)}>One completed execution per scan — populates Executions page</span></div>
-          <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.warnBg||t.bgInput,"text-amber-400")}>5/5</span><span className={cn("text-xs font-semibold",t.text)}>Post-Setup SQL</span><span className={cn("text-xs",t.textFaint)}>📋 kubectl command — source groups + multi-execution history (3-7 historical executions per scan)</span></div>
+          <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.warnBg||t.bgInput,"text-amber-400")}>5/5</span><span className={cn("text-xs font-semibold",t.text)}>Post-Setup SQL</span><span className={cn("text-xs",t.textFaint)}>📋 kubectl command — multi-execution history (3-7 historical executions per scan)</span></div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={async()=>{
@@ -6065,7 +6046,7 @@ fi
             <span className="text-2xl flex-shrink-0">✅</span>
             <div className="flex-1 min-w-0">
               <div className={cn("font-bold text-sm",t.success||"text-emerald-700 dark:text-emerald-300")}>Phase 5 SQL Applied Successfully</div>
-              <div className={cn("text-xs mt-1",t.textMuted)}>All {phase5VerifyDetails?.total||phase5PendingIds.length} new executions show real object counts. Source groups linked, historical executions cloned, MIP labels inserted. AA dashboards should now render correctly.</div>
+              <div className={cn("text-xs mt-1",t.textMuted)}>All {phase5VerifyDetails?.total||phase5PendingIds.length} new executions show real object counts. Historical executions cloned, MIP labels inserted. AA dashboards should now render correctly.</div>
             </div>
             <button onClick={()=>{setPhase5Status(null);setPhase5PendingIds([]);setPhase5VerifyDetails(null);}} className={cn("text-xs px-2 py-1 rounded",t.btnSecondary||t.codeBlock)}>Dismiss</button>
           </div>}
@@ -6095,7 +6076,7 @@ fi
               </div>
             </div>
             <div className={cn("text-[10px] mb-2 space-y-1",t.textFaint)}>
-              <p><b>What this does:</b> Creates source groups in Postgres and links them to sources (the REST API cannot do this), backdates scan execution timestamps to 3 weeks ago with realistic durations, and sets object counts (600-6,000) per scan type. Each part runs in its own transaction — if your AA version doesn't have the <code className={cn("px-1 rounded",t.codeBlock)}>source_groups</code> table (confirmed absent on some installs), that part fails cleanly without blocking the scan execution history.</p>
+              <p><b>What this does:</b> Backdates scan execution timestamps to 3 weeks ago with realistic durations, sets object counts (600-6,000) per scan type, and inserts synthetic MIP labels where applicable — none of which the REST API can do directly.</p>
               <p><b>How to run (recommended):</b> 1) Click "Download Script" above. 2) Copy the .sh file to the AA server (<code className={cn("px-1 rounded",t.codeBlock)}>scp aa-post-setup-*.sh sysadmin@appaa:~/</code>). 3) SSH in and run <code className={cn("px-1 rounded",t.codeBlock)}>bash aa-post-setup-*.sh</code>. Confirmed live: pasting this command directly into an interactive SSH session can corrupt on the way in for a paste this large (a stray terminator or a later line landing mid-statement) — bash reading it from a real file sidesteps that entirely.</p>
               <p><b>Copy to Clipboard</b> is still here for pasting into an editor or a short remote session, but isn't the recommended path for running it directly anymore.</p>
               <p><b>When to re-run:</b> Only after a fresh "Configure AA" run. Each run generates new UUIDs — always use the latest command.</p>
