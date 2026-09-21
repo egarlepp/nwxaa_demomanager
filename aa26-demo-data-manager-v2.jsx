@@ -5555,6 +5555,38 @@ echo "Refresh the AA dashboards to see the data."
 `;
     const b=new Blob([script],{type:"text/x-shellscript"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`inject-${cfg.global.domainName.toLowerCase()}.sh`;a.click();};
   const downloadConfig=()=>{const b=new Blob([JSON.stringify(cfg,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`aa26-config-${cfg.global.domainName.toLowerCase()}.json`;a.click();};
+  // v3.3.11: pasting the raw Phase 5 command straight into a live SSH/terminal session was
+  // corrupting on real hardware — the heredoc terminator or later fragments of the same paste
+  // landed mid-line (confirmed live: EOSQL appeared inside a WHERE clause, scan_executions row
+  // fragments spliced into the middle of the source_groups INSERTs), which then made bash close
+  // the heredoc early and run leftover pasted text as new shell commands — explains a
+  // "relation source_groups does not exist" error against a table that demonstrably exists.
+  // Same fix as the existing ClickHouse downloadScript() above: wrap the command in a real .sh
+  // file. bash reads a file via normal I/O, not simulated paste keystrokes, so this class of
+  // corruption can't happen — scp it over and run it, nothing to paste into the live session.
+  const downloadPostSetupScript=()=>{if(!aa26PostSetupCmd)return;const script=`#!/usr/bin/env bash
+# AA Post-Setup SQL — Generated ${new Date().toISOString()}
+# Organization: ${cfg.global.domainName}
+#
+# Creates source groups in Postgres and links them to sources (the REST API
+# cannot do this), backdates scan execution timestamps with realistic
+# durations, sets object counts per scan type, and inserts synthetic MIP
+# labels. Run on the AA server (requires kubectl access to the
+# access-analyzer namespace).
+#
+# Usage: bash aa-post-setup-${cfg.global.domainName.toLowerCase()}.sh
+
+set -e
+echo "AA Post-Setup SQL — ${cfg.global.domainName}"
+echo "================================================"
+echo ""
+
+${aa26PostSetupCmd}
+
+echo ""
+echo "Post-setup complete. Click 'Verify Now' in the app to confirm it landed."
+`;
+    const b=new Blob([script],{type:"text/x-shellscript"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`aa-post-setup-${cfg.global.domainName.toLowerCase()}.sh`;a.click();};
   return <div className="space-y-5">
     <SH n={6} title="⚡ Generate & Export" t={t}/>
     {/* v3.0 — Collapse controls only (jump nav is global at top of page) */}
@@ -6028,11 +6060,15 @@ echo "Refresh the AA dashboards to see the data."
           <div className={cn("p-2 rounded text-xs",t.bgInput)}>
             <div className="flex items-center justify-between mb-1">
               <span className={cn("font-semibold",t.text)}>📋 Phase 5: Post-Setup Command (run on AA server)</span>
-              <button onClick={()=>{navigator.clipboard.writeText(aa26PostSetupCmd);}} className={cn("text-xs px-2 py-1 rounded font-semibold",t.btnAccent)}>📋 Copy to Clipboard</button>
+              <div className="flex gap-1.5">
+                <button onClick={downloadPostSetupScript} className={cn("text-xs px-2 py-1 rounded font-semibold",t.btnAccent)}>⬇️ Download Script</button>
+                <button onClick={()=>{navigator.clipboard.writeText(aa26PostSetupCmd);}} className={cn("text-xs px-2 py-1 rounded font-semibold",t.btnSecondary)}>📋 Copy to Clipboard</button>
+              </div>
             </div>
             <div className={cn("text-[10px] mb-2 space-y-1",t.textFaint)}>
               <p><b>What this does:</b> Creates source groups in Postgres and links them to sources (the REST API cannot do this), backdates scan execution timestamps to 3 weeks ago with realistic durations, and sets object counts (600-6,000) per scan type.</p>
-              <p><b>How to run:</b> 1) Click "Copy to Clipboard" above. 2) SSH to the AA server (<code className={cn("px-1 rounded",t.codeBlock)}>ssh sysadmin@appaa</code>). 3) Paste and press Enter. The command runs SQL directly against the AA Postgres database via kubectl.</p>
+              <p><b>How to run (recommended):</b> 1) Click "Download Script" above. 2) Copy the .sh file to the AA server (<code className={cn("px-1 rounded",t.codeBlock)}>scp aa-post-setup-*.sh sysadmin@appaa:~/</code>). 3) SSH in and run <code className={cn("px-1 rounded",t.codeBlock)}>bash aa-post-setup-*.sh</code>. Confirmed live: pasting this command directly into an interactive SSH session can corrupt on the way in for a paste this large (a stray terminator or a later line landing mid-statement) — bash reading it from a real file sidesteps that entirely.</p>
+              <p><b>Copy to Clipboard</b> is still here for pasting into an editor or a short remote session, but isn't the recommended path for running it directly anymore.</p>
               <p><b>When to re-run:</b> Only after a fresh "Configure AA" run. Each run generates new UUIDs — always use the latest command.</p>
             </div>
             <pre className={cn("text-[9px] max-h-32 overflow-auto p-1 rounded",t.codeBlock)} style={{whiteSpace:"pre-wrap",wordBreak:"break-all"}}>{aa26PostSetupCmd}</pre>
