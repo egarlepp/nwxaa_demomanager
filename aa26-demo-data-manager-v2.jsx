@@ -4,7 +4,7 @@ import { useState, useCallback, useEffect } from "react";
 
 
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.3.10";
+const APP_VERSION = "3.3.12";
 // v3.2.0: the AA26 product version this build was actually validated against. Compared live
 // against the connected instance's real version (read via /api/v1/source-types) so a mismatch
 // gets flagged before it causes confusing data-injection failures.
@@ -5630,7 +5630,7 @@ echo "Refresh the AA dashboards to see the data."
               <button onClick={()=>setAa26WipeConfirm(true)} disabled={aa26WipeBusy||aa26ConfigBusy} className={cn("text-xs px-3 py-1.5 rounded-lg font-semibold border transition",aa26WipeMode==="all"?"text-red-400 border-red-500/30 hover:bg-red-500/10":"text-amber-400 border-amber-500/30 hover:bg-amber-500/10",(aa26WipeBusy||aa26ConfigBusy)&&"opacity-50")}>{aa26WipeMode==="all"?"Full Reset...":"Wipe Demo Config..."}</button>
             </div>
             <Modal open={aa26WipeConfirm} onClose={()=>setAa26WipeConfirm(false)} title={aa26WipeMode==="all"?"🗑️ Confirm Full Reset":"🗑️ Confirm Demo Wipe"} t={t} danger>
-              <p className={cn("text-xs mb-2",t.text)}>{aa26WipeMode==="all"?"⚠ This will delete ALL configuration content from AA26:":"This will delete demo-created items only:"}</p>
+              <p className={cn("text-xs mb-2",t.text)}>{aa26WipeMode==="all"?"⚠ This will delete ALL configuration content from AA:":"This will delete demo-created items only:"}</p>
               <ul className={cn("text-xs mb-3 space-y-0.5 ml-4 list-disc",t.textMuted)}>
                 <li>All Scan Executions</li>
                 <li>All Scans</li>
@@ -5891,7 +5891,7 @@ echo "Refresh the AA dashboards to see the data."
     <div id="step-5">
     {/* AA26 Configuration Setup (v2.8.0) */}
     <Card t={t}><details>
-      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 5</span>🛠️ AA26 Configuration Setup <span className={cn("text-xs font-normal",t.textFaint)}>— Service Accounts, Sources & Scans (Optional)</span> {aa26ConfigBusy&&<span className={cn("text-xs animate-pulse ml-1",t.accent)}>⏳ Running...</span>} {!aa26ConfigBusy&&aa26ConfigLog.length>0&&!aa26ConfigLog.some(m=>m.startsWith("✗"))&&<Badge variant="success" t={t}>✓ Complete</Badge>} {!aa26ConfigBusy&&aa26ConfigLog.some(m=>m.startsWith("✗"))&&<Badge variant="warn" t={t}>⚠ Errors</Badge>}</summary>
+      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 5</span>🛠️ AA Configuration Setup <span className={cn("text-xs font-normal",t.textFaint)}>— Service Accounts, Sources & Scans (Optional)</span> {aa26ConfigBusy&&<span className={cn("text-xs animate-pulse ml-1",t.accent)}>⏳ Running...</span>} {!aa26ConfigBusy&&aa26ConfigLog.length>0&&!aa26ConfigLog.some(m=>m.startsWith("✗"))&&<Badge variant="success" t={t}>✓ Complete</Badge>} {!aa26ConfigBusy&&aa26ConfigLog.some(m=>m.startsWith("✗"))&&<Badge variant="warn" t={t}>⚠ Errors</Badge>}</summary>
       <div className="mt-3 space-y-3">
         <div className={cn("p-2 rounded text-xs",t.bgInput,t.textMuted)}>One-time setup per AA environment. Requires <b>AA API Authentication</b> verified on the Connection tab (same-origin mode strongly recommended). Creates the Configuration page entries so a clean install matches a real lab. Idempotent — skips items that already exist by name.</div>
         <div className="space-y-1">
@@ -5951,9 +5951,9 @@ echo "Refresh the AA dashboards to see the data."
             } catch(e) { logFn(`✗ Error: ${e.message}`); if(toast)toast(`Configuration failed: ${e.message}`,"error"); }
             setAa26ConfigBusy(false);
           }} disabled={aa26ConfigBusy||(!cfg.connection.aa26SessionCookie&&!(typeof window!=="undefined"&&window.location.hostname===cfg.connection.aa26Host))} className={cn("text-xs px-4 py-2 rounded-lg font-semibold transition",t.btnAccent,"disabled:opacity-50")}>
-            {aa26ConfigBusy?"⏳ Configuring...":"🛠️ Configure AA26 (All Phases)"}
+            {aa26ConfigBusy?"⏳ Configuring...":"🛠️ Configure AA (All Phases)"}
           </button>
-          {!cfg.connection.aa26SessionCookie&&!(typeof window!=="undefined"&&window.location.hostname===cfg.connection.aa26Host)&&<span className={cn("text-xs",t.warn)}>⚠ Set AA26 session cookie on Connection tab first (or host this app on the AA26 origin)</span>}
+          {!cfg.connection.aa26SessionCookie&&!(typeof window!=="undefined"&&window.location.hostname===cfg.connection.aa26Host)&&<span className={cn("text-xs",t.warn)}>⚠ Set AA session cookie on Connection tab first (or host this app on the AA origin)</span>}
         </div>
         {/* v3.0 — Phase Progress Bar */}
         {(aa26ConfigBusy||aa26ConfigPhase>0)&&<div className={cn("p-3 rounded-lg",t.bgInput)}>
