@@ -17,7 +17,7 @@ const {useState, useCallback, useEffect} = React;
 
 
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.3.8";
+const APP_VERSION = "3.3.9";
 // v3.2.0: the AA26 product version this build was actually validated against. Compared live
 // against the connected instance's real version (read via /api/v1/source-types) so a mismatch
 // gets flagged before it causes confusing data-injection failures.
@@ -987,7 +987,7 @@ const DEFAULT_CONFIG = {
   sd:{enabled:true,enabledGroups:["PII","PHI","PCI DSS","Financial Records","Credentials","GDPR","GDPR Restricted","CCPA","HIPAA","CMMC","GLBA"],
   // v3.0.1: MIP Labels (Microsoft Information Protection) — link sensitive data types to MIP sensitivity labels
   mipLabels:{
-    enabled:true,
+    enabled:false, // v3.3.9: default flipped off — was on by default since v3.0.1, user request
     labels:[
       {id:"public",name:"Public",description:"Anyone can access. No sensitivity classification required.",priority:0,color:"#22c55e"},
       {id:"internal",name:"Internal",description:"For internal use only. Default classification for most content.",priority:1,color:"#3b82f6"},
