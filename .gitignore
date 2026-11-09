@@ -1,0 +1,16 @@
+# Dependencies installed by CI / local checks
+node_modules/
+package-lock.json
+
+# Installer backups and downloads produced while using the tool
+*.bak
+aa-post-setup-*.sh
+aa-demo-*.json
+aa-demo-*.txt
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp

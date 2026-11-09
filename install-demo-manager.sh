@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ─────────────────────────────────────────────────────────────────────────────
-# AA26 Demo Data Manager — Installer / Updater
-# Run on the AA26 server. Handles first-time install OR version updates.
+# AA Demo Data Manager — Installer / Updater
+# Run on the AA server. Handles first-time install OR version updates.
 # Usage:
 #   ./install-demo-manager.sh                  # interactive (auto-detect)
 #   ./install-demo-manager.sh install          # force first-time install
@@ -32,7 +32,7 @@ CONFIGMAP="demo-manager-html"
 preflight() {
   hdr "Preflight Checks"
   if ! command -v kubectl >/dev/null 2>&1; then
-    err "kubectl not found. This installer must run on the AA26 server."; exit 1
+    err "kubectl not found. This installer must run on the AA server."; exit 1
   fi
   ok "kubectl found: $(kubectl version --client --short 2>/dev/null | head -1)"
 
@@ -49,7 +49,7 @@ preflight() {
     TRAEFIK_API="traefik.containo.us/v1alpha1"
     warn "Traefik CRD: traefik.containo.us (legacy) — will rewrite yaml"
   else
-    err "No Traefik CRDs found. Is AA26 actually running k3s with Traefik ingress?"; exit 1
+    err "No Traefik CRDs found. Is AA actually running k3s with Traefik ingress?"; exit 1
   fi
 }
 
@@ -111,7 +111,7 @@ require_html() {
   if [ ! -f "$HTML_FILE" ]; then
     err "HTML file not found: $HTML_FILE"
     echo "  Copy it first from your workstation:"
-    echo "    scp demo-data-manager.html sysadmin@$(hostname):${INSTALL_DIR}/"
+    echo "    scp demo-data-manager.html $(whoami)@$(hostname -f 2>/dev/null || hostname):${INSTALL_DIR}/"
     exit 1
   fi
 }
@@ -120,7 +120,7 @@ require_yaml() {
   if [ ! -f "$YAML_FILE" ]; then
     err "Manifest not found: $YAML_FILE"
     echo "  Copy it first from your workstation:"
-    echo "    scp demo-manager.yaml sysadmin@$(hostname):${INSTALL_DIR}/"
+    echo "    scp demo-manager.yaml $(whoami)@$(hostname -f 2>/dev/null || hostname):${INSTALL_DIR}/"
     exit 1
   fi
 }
@@ -222,7 +222,7 @@ cmd_uninstall() {
   preflight
   detect_state
 
-  read -rp "$(printf "${YELLOW}Remove demo-manager from cluster? (y/N): ${NC}")" ans
+  read -rp "$(printf "%bRemove demo-manager from cluster? (y/N): %b" "$YELLOW" "$NC")" ans
   case "$ans" in
     y|Y|yes|YES) ;;
     *) log "Cancelled"; exit 0 ;;
