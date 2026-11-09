@@ -1,8 +1,7 @@
-# AA Demo Data Manager — New Server Install Guide
+# Install Guide
 
-Everything needed to get the Demo Data Manager running on a **brand-new AA26 server** that's never had it installed before — including the access hurdles that actually came up doing this for real, not just the happy path.
+Everything needed to get the Demo Data Manager running on a **brand-new AA server** that's never had it installed before — including the access hurdles that actually came up doing this for real, not just the happy path.
 
-Current app version as of this guide: **v3.2.7**
 
 ---
 
@@ -10,8 +9,8 @@ Current app version as of this guide: **v3.2.7**
 
 | Item | Notes |
 |---|---|
-| SSH access to the AA26 server | As a user with sudo rights (this guide uses `sysadmin`) |
-| The three deployment files | `demo-data-manager.html`, `demo-manager.yaml`, `install-demo-manager.sh` — all from the latest chat/output |
+| SSH access to the AA server | As a user with sudo rights (examples below use `<user>`) |
+| The three deployment files | `demo-data-manager.html`, `demo-manager.yaml`, `install-demo-manager.sh` — all in the root of this repository (clone it, or download a release) |
 | ~15 minutes | Most of it is waiting on `scp` and pod readiness |
 
 ---
@@ -21,7 +20,7 @@ Current app version as of this guide: **v3.2.7**
 SSH in and try:
 
 ```bash
-ssh sysadmin@<server>
+ssh <user>@<server>
 kubectl get nodes
 ```
 
@@ -53,9 +52,9 @@ You should see one node, `Ready`. (You may also see harmless `WARN open /etc/ran
 From your workstation:
 
 ```bash
-ssh sysadmin@<server> "mkdir -p ~/demo-data-manager"
+ssh <user>@<server> "mkdir -p ~/demo-data-manager"
 scp demo-data-manager.html demo-manager.yaml install-demo-manager.sh \
-    sysadmin@<server>:~/demo-data-manager/
+    <user>@<server>:~/demo-data-manager/
 ```
 
 ---
@@ -63,7 +62,7 @@ scp demo-data-manager.html demo-manager.yaml install-demo-manager.sh \
 ## Step 3 — Run the installer
 
 ```bash
-ssh sysadmin@<server>
+ssh <user>@<server>
 cd ~/demo-data-manager
 chmod +x install-demo-manager.sh
 ./install-demo-manager.sh
@@ -100,11 +99,11 @@ Open `https://<server>/demo-manager/` and hard-refresh (`Ctrl+Shift+R`) to bypas
 
 ### 4a. Connect to Metabase
 
-On the Connection tab, click **Connect**. This uses your existing AA26 session (same-origin) — no separate Metabase login. On success you'll see the connected database name and a pattern-group/pattern count.
+On the Connection tab, click **Connect**. This uses your existing AA session (same-origin) — no separate Metabase login. On success you'll see the connected database name and a pattern-group/pattern count.
 
 ### 4b. Grant DB permissions (one-time per environment — two separate privilege sets)
 
-**This step is easy to miss and will silently block data injection and report population if skipped.** A fresh AA26 install's Metabase-connected ClickHouse user is read-only by default, and there are **two distinct privilege gaps**, not one:
+**This step is easy to miss and will silently block data injection and report population if skipped.** A fresh AA install's Metabase-connected ClickHouse user is read-only by default, and there are **two distinct privilege gaps**, not one:
 
 | Privilege set | What it unlocks | Scope |
 |---|---|---|
@@ -113,7 +112,7 @@ On the Connection tab, click **Connect**. This uses your existing AA26 session (
 
 Click **⚡ Grant DB Permissions** (Connection tab, appears once Connect succeeds) — as of v3.2.4 it attempts **both** in one click. If it reports full success, you're done.
 
-**If it fails on either (or both)** — self-granting the `*.*`-scoped SYSTEM privileges is blocked in some environments even when the narrower `access_analyzer.*` grant isn't — run this on the AA26 server instead:
+**If it fails on either (or both)** — self-granting the `*.*`-scoped SYSTEM privileges is blocked in some environments even when the narrower `access_analyzer.*` grant isn't — run this on the AA server instead:
 
 ```bash
 sudo kubectl exec -it -n access-analyzer clickhouse-0 -- clickhouse-client --multiquery --query "GRANT INSERT, TRUNCATE, ALTER DELETE, ALTER UPDATE ON access_analyzer.* TO access_analyzer_metabase; GRANT SYSTEM RELOAD DICTIONARY, SYSTEM REFRESH VIEW ON *.* TO access_analyzer_metabase;"
@@ -123,9 +122,9 @@ sudo kubectl exec -it -n access-analyzer clickhouse-0 -- clickhouse-client --mul
 
 No need to reconnect afterward — just proceed.
 
-### 4c. Detect AA26 session
+### 4c. Detect AA session
 
-On the same Connection tab, click **Detect Session** (AA26 API Authentication card). This confirms the REST API side (Service Accounts / Sources / Scans) and, since v3.2.0, also discovers the real Sensitive Data Pattern catalog from this instance.
+On the same Connection tab, click **Detect Session** (AA API Authentication card). This confirms the REST API side (Service Accounts / Sources / Scans) and, since v3.2.0, also discovers the real Sensitive Data Pattern catalog from this instance.
 
 Both cards should show green before moving on.
 
@@ -136,7 +135,7 @@ Both cards should show green before moving on.
 Walk the remaining tabs (Organization → Identity → Data Sources → Classification), then on Generate:
 
 1. **Generate Demo Data** → **Fresh Install** (or **Inject**) — populates ClickHouse
-2. **Configure AA26** — populates Service Accounts, Sources, Scans via the REST API
+2. **Configure AA** — populates Service Accounts, Sources, Scans via the REST API
 
 ---
 
@@ -145,8 +144,8 @@ Walk the remaining tabs (Organization → Identity → Data Sources → Classifi
 Once installed, every future version bump is just:
 
 ```bash
-scp demo-data-manager.html sysadmin@<server>:~/demo-data-manager/
-ssh sysadmin@<server> "cd ~/demo-data-manager && ./install-demo-manager.sh"
+scp demo-data-manager.html <user>@<server>:~/demo-data-manager/
+ssh <user>@<server> "cd ~/demo-data-manager && ./install-demo-manager.sh"
 ```
 
 The installer auto-detects the existing deployment and takes the update path (ConfigMap replace + pod restart) instead of reinstalling from scratch. Hard-refresh the browser afterward.

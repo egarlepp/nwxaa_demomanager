@@ -1,7 +1,7 @@
-# AA26 Demo Data Manager — k3s manifest
+# AA Demo Data Manager — k3s manifest
 # Deploys the built demo-data-manager.html as a static nginx site behind Traefik at
 # /demo-manager/. Installed/updated by install-demo-manager.sh — see
-# AA26-DemoDataManager-Deployment.md for the full reference and troubleshooting.
+# docs/INSTALL.md for the full walkthrough and troubleshooting.
 #
 # Traefik API version: this file uses the modern `traefik.io/v1alpha1`. If this
 # cluster runs the legacy CRDs, install-demo-manager.sh detects that automatically
@@ -81,7 +81,7 @@ spec:
     prefixes:
     - /demo-manager
 ---
-# 4. IngressRoute — routes /demo-manager/* to the Service, reusing AA26's
+# 4. IngressRoute — routes /demo-manager/* to the Service, reusing AA's
 #    existing TLS termination (no separate cert handling needed here)
 apiVersion: traefik.io/v1alpha1
 kind: IngressRoute

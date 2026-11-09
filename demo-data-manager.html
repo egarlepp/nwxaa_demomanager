@@ -17,15 +17,15 @@ const {useState, useCallback, useEffect} = React;
 
 
 /* ─── Theme ──────────────────────────────────────────── */
-const APP_VERSION = "3.3.17";
-// v3.2.0: the AA26 product version this build was actually validated against. Compared live
+const APP_VERSION = "3.3.18";
+// v3.2.0: the AA product version this build was actually validated against. Compared live
 // against the connected instance's real version (read via /api/v1/source-types) so a mismatch
 // gets flagged before it causes confusing data-injection failures.
 // v3.3.2: list, not a single string — v1.1.6 confirmed compatible via live schema-diff (zero
 // drift across all 13 hardcoded-column tables), so it's added alongside 1.1.5 rather than
 // replacing it. A straight swap would've made a real v1.1.5 connection show a false mismatch.
 // v3.3.15: 1.1.7 added as the latest supported version.
-const AA26_SUPPORTED_VERSIONS = ["1.1.5", "1.1.6", "1.1.7"];
+const AA_SUPPORTED_VERSIONS = ["1.1.5", "1.1.6", "1.1.7"];
 const themes = {
   dark: {
     bg: "bg-slate-950", bgCard: "bg-slate-900/70", bgInput: "bg-slate-800/80", bgHover: "hover:bg-slate-800",
@@ -689,7 +689,7 @@ function applyLocaleChange(cfg, newLocaleKey) {
   updated = applyVerticalTemplate(updated, updated.global.vertical || 'generic');
 
   // v3.2.0: locale no longer injects fictional regional-regulation "taxonomies" — none of the
-  // old extraRegulations names (LGPD, BDSG, RODO, etc.) correspond to a real AA26 Sensitive Data
+  // old extraRegulations names (LGPD, BDSG, RODO, etc.) correspond to a real AA Sensitive Data
   // Pattern group, so keeping that cascade would just reintroduce the fictional/real mismatch
   // this rework removes. Vertical selection alone now drives sd.enabledGroups.
   return updated;
@@ -820,7 +820,7 @@ const applyVerticalTemplate = (cfg, verticalKey) => {
     })};
   }
 
-  // 5) Sensitive data — vertical selection directly replaces which real AA26 Sensitive Data
+  // 5) Sensitive data — vertical selection directly replaces which real AA Sensitive Data
   // Pattern groups are emphasized (v3.2.0: no more fictional regional-regulation merging —
   // see applyLocaleChange for why that was removed).
   let newSd = cfg.sd;
@@ -922,8 +922,11 @@ const chDefault=(colType)=>{
 };
 
 /* ─── Default Config ──────────────────────────────────── */
+// Defaults to the origin this page is served from — the supported deployment is same-origin
+// with AA (https://<aa-host>/demo-manager/). Opened from file:// these stay empty.
+const PAGE_LOCATION = (typeof window!=="undefined" && /^https?:$/.test(window.location.protocol)) ? window.location : null;
 const DEFAULT_CONFIG = {
-  connection:{url:"https://appaa.cloud.lab",username:"administrator@cloud.lab",password:"",method:"clickhouse_http",ch_host:"localhost",ch_port:8123,ch_user:"default",ch_pass:"",aa26Host:"appaa.cloud.lab",aa26SessionCookie:""},
+  connection:{url:PAGE_LOCATION?PAGE_LOCATION.origin:"",username:"",password:"",method:"clickhouse_http",ch_host:"localhost",ch_port:8123,ch_user:"default",ch_pass:"",aa26Host:PAGE_LOCATION?PAGE_LOCATION.hostname:"",aa26SessionCookie:""},
   global:{vertical:"generic",locale:"us",domainName:"ACME",domainFqdn:"acme.local",additionalDomains:[],sidBase:"S-1-5-21-3298745201-1587429463-2190384756",tenantId:"a1b2c3d4-e5f6-7890-abcd-ef1234567890",historyMonths:2,scanFreqDays:14,richActivityTimeline:0,batchOffset:0,activityPattern:{enabled:false,workStart:9,workEnd:17,lunchDip:true,nightActivity:false,weekendActivity:false}},
   ad:{enabled:true,userCount:200,groupCount:60,departments:[
     {name:"IT",weight:12,subs:["Infrastructure","Security","Development","Help Desk"]},
@@ -980,10 +983,10 @@ const DEFAULT_CONFIG = {
       {name:"OneDrive - Marketing Mgr",url:"https://acme-my.sharepoint.com/personal/marketingmgr_acme_local",type:"onedrive",docs:35,sensitiveRate:10,libraries:["Documents"]}
     ]}
   ],externalSharing:5},
-  // v3.2.0: replaced the fictional hardcoded taxonomy/term list with the real AA26 Sensitive
-  // Data Pattern Groups — confirmed live via GraphQL against AA26 v1.1.5 (11 built-in groups).
-  // This fallback list is used until the AA26 REST API session connects and discovers the
-  // real catalog (which also picks up any custom groups/patterns the user has added in AA26).
+  // v3.2.0: replaced the fictional hardcoded taxonomy/term list with the real AA Sensitive
+  // Data Pattern Groups — confirmed live via GraphQL against AA v1.1.5 (11 built-in groups).
+  // This fallback list is used until the AA REST API session connects and discovers the
+  // real catalog (which also picks up any custom groups/patterns the user has added in AA).
   // enabledGroups controls which groups get emphasized when generating sensitive-data hits.
   sd:{enabled:true,enabledGroups:["PII","PHI","PCI DSS","Financial Records","Credentials","GDPR","GDPR Restricted","CCPA","HIPAA","CMMC","GLBA"],
   // v3.0.1: MIP Labels (Microsoft Information Protection) — link sensitive data types to MIP sensitivity labels
@@ -995,7 +998,7 @@ const DEFAULT_CONFIG = {
       {id:"confidential",name:"Confidential",description:"Sensitive information requiring protection. Limited distribution.",priority:2,color:"#f59e0b"},
       {id:"highly_confidential",name:"Highly Confidential",description:"Most sensitive data. Encryption + access controls required.",priority:3,color:"#ef4444"}
     ],
-    // Map AA26 data type IDs (hardcoded by AA26 backend) → our label IDs
+    // Map AA data type IDs (hardcoded by AA backend) → our label IDs
     mappings:{
       ccpa:"confidential",
       cmmc:"highly_confidential",
@@ -1173,7 +1176,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
   if(cfg.fs.enabled){
     onProgress&&onProgress("[Phase 2/5] Generating file system...");await tick();const oR=[],sR=[],pR=[],aR=[],spR=[];let fc=0;
     const PERMS=[['FILE_READ_DATA','FILE_EXECUTE','READ_CONTROL'],['FILE_READ_DATA','FILE_WRITE_DATA','FILE_EXECUTE','DELETE','READ_CONTROL'],['GENERIC_ALL'],['GENERIC_READ'],['FILE_READ_DATA','FILE_READ_EA','FILE_READ_ATTRIBUTES','READ_CONTROL']];
-    // v3.3.0: real AA26 normalized_permissions format (FixedString(6), confirmed against
+    // v3.3.0: real AA normalized_permissions format (FixedString(6), confirmed against
     // Netwrix's own FileSystem Permissions Format Reference doc): positional letters in fixed
     // order L-R-W-D-M-A (List/Read/Write/Delete/Manage-DAC/take-Ownership), '-' where absent.
     // Was hardcoded to the meaningless placeholder '000000' for every single row before this.
@@ -1670,7 +1673,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     }
 
     // v3.1.4: AD Activity Monitor generation (netwrix_activity_monitor_ad) — NEW table, confirmed
-    // live against AA26 v1.1.5. Didn't exist in prior versions (AD had no dedicated activity log).
+    // live against AA v1.1.5. Didn't exist in prior versions (AD had no dedicated activity log).
     if(!cfg._schemas||!cfg._schemas.netwrix_activity_monitor_ad){
       onProgress&&onProgress("  ⚠ AD Activity: SKIPPED — `netwrix_activity_monitor_ad` schema not discovered");
     }else{
@@ -1754,7 +1757,7 @@ async function generateDemoDataAsync(cfg, onProgress, tick){
     }
 
     // v3.1.4: Entra ID Activity Monitor generation (netwrix_activity_monitor_entra) — NEW table,
-    // confirmed live against AA26 v1.1.5. Reuses the same AD users so identities line up across
+    // confirmed live against AA v1.1.5. Reuses the same AD users so identities line up across
     // both activity logs (a user who exists in AD shows up signing into Entra too).
     if(!cfg._schemas||!cfg._schemas.netwrix_activity_monitor_entra){
       onProgress&&onProgress("  ⚠ Entra Activity: SKIPPED — `netwrix_activity_monitor_entra` schema not discovered");
@@ -3024,7 +3027,7 @@ async function mbDiscoverEverything(cfg, onProgress) {
 
   // V2.7.1: Tables our generator knows how to populate (base tables only).
   // Anything that's a View, MaterializedView, Dictionary, or derivative (_latest, _mv, etc.)
-  // is excluded from "unknown" since AA26 populates those automatically from our base data.
+  // is excluded from "unknown" since AA populates those automatically from our base data.
   const KNOWN_TABLES = new Set([
     'active_directory_user','active_directory_group','active_directory_group_membership','active_directory_effective_group_membership','active_directory_risk_catalog',
     'cifs_object','cifs_permission','cifs_share_permission','cifs_sensitive_data',
@@ -3032,13 +3035,13 @@ async function mbDiscoverEverything(cfg, onProgress) {
     'netwrix_activity_monitor_json','netwrix_activity_monitor_spo','netwrix_activity_monitor_copilot',
     'localgroups_group','localgroups_user','localgroups_group_members','localgroups_effective_group_membership',
     'entities','principals','permissions','permission_sets','permission_grant_rules','memberships','ownerships','sensitive_data','classifications','crawl_completions','system_objects',
-    // V2.7.1: AA26-shipped seed tables — ship with data, we don't populate but they're not gaps
+    // V2.7.1: AA-shipped seed tables — ship with data, we don't populate but they're not gaps
     'domain_type_properties','path_metadata','permission_calc_rules','source_type_registry','source_settings',
     // Optional features we don't currently demo but don't block any reports
     'active_directory_user_custom_attribute','netwrix_activity_monitor_leef',
     // v3.1.4: generators added this pass — confirmed real gaps, not false positives like the three below
     'netwrix_activity_monitor_ad','netwrix_activity_monitor_entra',
-    // v3.1.3: confirmed live against AA26 v1.1.5 — companion base table to cifs_latest_scan_execution_mv,
+    // v3.1.3: confirmed live against AA v1.1.5 — companion base table to cifs_latest_scan_execution_mv,
     // auto-populated from cifs_object/cifs_permission inserts, same as every other _latest/_mv pair
     'cifs_latest_scan_execution',
     // v3.1.3: "_pre_v2" tables are superseded by sharepoint_sensitive_data post-migration (this env has
@@ -3056,9 +3059,9 @@ async function mbDiscoverEverything(cfg, onProgress) {
     if (KNOWN_TABLES.has(name)) return false;
     // Skip ClickHouse internals
     if (name.startsWith('.inner') || name.startsWith('_tmp_')) return false;
-    // Skip views, MVs, dictionaries — these derive from base tables AA26 manages automatically
+    // Skip views, MVs, dictionaries — these derive from base tables AA manages automatically
     if (engine === 'View' || engine === 'MaterializedView' || engine === 'LiveView' || engine === 'Dictionary') return false;
-    // Skip naming conventions for derivatives that AA26 maintains
+    // Skip naming conventions for derivatives that AA maintains
     if (/_latest$|_mv$|_resolved$|_summary$|_summary_mv$|_by_domain$|_by_domain_mv$|_with_path$|_member_counts$|_mip_labels(_latest|_summary)?$/.test(name)) return false;
     // Skip schema/version tracking
     if (name === 'schema_migrations' || name === 'schema_versions') return false;
@@ -3088,8 +3091,8 @@ async function mbDiscoverEverything(cfg, onProgress) {
   return report;
 }
 
-// === AA26 REST API helpers (v2.8.0-alpha) ===
-// AA26 uses cookie-only OIDC auth. Users paste their _dspm_session from browser DevTools.
+// === AA REST API helpers (v2.8.0-alpha) ===
+// AA uses cookie-only OIDC auth. Users paste their _dspm_session from browser DevTools.
 // Investigation findings captured 2026-05-21: no token/PAT/API-key mechanism exists.
 // v3.3.1: schema-compatibility checker — the 13 tables the generator writes to with a fixed,
 // hardcoded column list (schema-discovery-driven tables like entities/principals/Copilot/AD/
@@ -3139,11 +3142,11 @@ async function runSchemaCompatibilityCheck(cfg) {
   });
 }
 
-const AA26_SOURCE_TYPES_FALLBACK = {
+const AA_SOURCE_TYPES_FALLBACK = {
 
-  // v3.2.2: these UUIDs are from the OLD lab and are NOT valid in a fresh/different AA26
+  // v3.2.2: these UUIDs are from the OLD lab and are NOT valid in a fresh/different AA
   // environment — sending a mismatched sourceTypeId caused every source create to 500.
-  // Kept only as a last-resort if live discovery (aa26DiscoverSourceTypes) fails entirely.
+  // Kept only as a last-resort if live discovery (aaDiscoverSourceTypes) fails entirely.
   "active-directory":      "0ea3dea8-ed5f-45f7-8ca2-5ce8a1d34c17",
   "cifs":                  "3fdcfc88-3ca2-4f64-adf5-43b7e5a4a950",
   "entra-id":              "368333e7-dd4a-4078-ae8c-b6a1d08ef216",
@@ -3153,14 +3156,14 @@ const AA26_SOURCE_TYPES_FALLBACK = {
   "localgroups":           "a2f164b5-23c6-4d11-b329-e2f7c9e07974", // hidden from /source-types listing
 };
 
-// v3.2.2: discover the REAL source-type UUIDs for whatever AA26 instance we're connected to —
-// these are environment-specific and change between installs/versions (confirmed: this AA26
+// v3.2.2: discover the REAL source-type UUIDs for whatever AA instance we're connected to —
+// these are environment-specific and change between installs/versions (confirmed: this AA
 // version dropped plain "entra-id"/"sharepoint" in favor of *-ccf variants, and added a new
 // "file-server-discover" type). "localgroups" stays hidden from this listing in every version
 // seen so far, so it's intentionally left out of the returned map — callers should treat a
 // missing key as "not creatable via API in this environment", not retry with a guessed UUID.
-async function aa26DiscoverSourceTypes(cfg) {
-  const r = await aa26Fetch(cfg, "/api/v1/source-types");
+async function aaDiscoverSourceTypes(cfg) {
+  const r = await aaFetch(cfg, "/api/v1/source-types");
   if (!r.ok) throw new Error(`source-types discovery failed: HTTP ${r.status}`);
   const list = r.body?.data || (Array.isArray(r.body) ? r.body : []);
   const map = {};
@@ -3168,7 +3171,7 @@ async function aa26DiscoverSourceTypes(cfg) {
   return map;
 }
 
-async function aa26Fetch(cfg, path, opts={}) {
+async function aaFetch(cfg, path, opts={}) {
   const host = cfg.connection?.aa26Host || cfg.connection.host;
   const cookie = cfg.connection?.aa26SessionCookie || "";
   // V2.8.0-alpha refinement: same-origin auto-mode — browser auto-attaches cookies
@@ -3189,10 +3192,10 @@ async function aa26Fetch(cfg, path, opts={}) {
   return { status: r.status, ok: r.ok, body };
 }
 
-// v3.2.0: AA26's GraphQL endpoint (separate from the REST /api/v1/* surface, same-origin
+// v3.2.0: AA's GraphQL endpoint (separate from the REST /api/v1/* surface, same-origin
 // _dspm_session cookie auth). Used to discover the real Sensitive Data Pattern Groups/Patterns
 // catalog — confirmed live via Apollo cache inspection (introspection is disabled server-side).
-async function aa26GraphQL(cfg, query, variables) {
+async function aaGraphQL(cfg, query, variables) {
   const host = cfg.connection?.aa26Host || cfg.connection.host;
   const isSameOrigin = typeof window !== "undefined" && window.location.hostname === host;
   const url = isSameOrigin ? "/graphql" : `https://${host}/graphql`;
@@ -3206,19 +3209,19 @@ async function aa26GraphQL(cfg, query, variables) {
   return j.data;
 }
 
-// v3.2.0: Discover the real Sensitive Data Pattern Groups + Patterns from this AA26 instance.
-// Confirmed live against AA26 v1.1.5: 11 built-in groups (CCPA, CMMC, Credentials, Financial
+// v3.2.0: Discover the real Sensitive Data Pattern Groups + Patterns from this AA instance.
+// Confirmed live against AA v1.1.5: 11 built-in groups (CCPA, CMMC, Credentials, Financial
 // Records, GDPR, GDPR Restricted, GLBA, HIPAA, PCI DSS, PHI, PII), 139 built-in patterns, each
-// with a real regex and confidence level. Users can also add custom groups/patterns in AA26
+// with a real regex and confidence level. Users can also add custom groups/patterns in AA
 // itself — this discovery call picks those up too, no code change needed on our end.
-async function aa26DiscoverSensitiveDataCatalog(cfg) {
+async function aaDiscoverSensitiveDataCatalog(cfg) {
   const groupsQ = `query($page:Int,$pageSize:Int){ sensitiveDataPatternGroups(page:$page,pageSize:$pageSize){ data{ id name } } }`;
   const patQ = `query($page:Int,$pageSize:Int){ sensitiveDataPatterns(page:$page,pageSize:$pageSize){ data{ id name confidence groups{ id name } } } }`;
-  const gData = await aa26GraphQL(cfg, groupsQ, {page:1, pageSize:200});
+  const gData = await aaGraphQL(cfg, groupsQ, {page:1, pageSize:200});
   const groups = gData.sensitiveDataPatternGroups.data;
   let patterns = [];
   for (let page=1; page<=10; page++) {
-    const pData = await aa26GraphQL(cfg, patQ, {page, pageSize:100});
+    const pData = await aaGraphQL(cfg, patQ, {page, pageSize:100});
     const batch = pData.sensitiveDataPatterns.data;
     patterns = patterns.concat(batch);
     if (batch.length < 100) break; // last page
@@ -3234,40 +3237,40 @@ async function aa26DiscoverSensitiveDataCatalog(cfg) {
   return { groups: groups.map(g=>g.name), byGroup, patternCount: patterns.length };
 }
 
-async function aa26VerifySession(cfg) {
+async function aaVerifySession(cfg) {
   try {
-    const r = await aa26Fetch(cfg, "/api/v1/auth/me");
+    const r = await aaFetch(cfg, "/api/v1/auth/me");
     if (r.ok && r.body?.user) return { ok:true, user:r.body.user };
     return { ok:false, error:`HTTP ${r.status}: ${r.body?.message || "Invalid session"}` };
   } catch(e) { return { ok:false, error:e.message }; }
 }
 
-async function aa26GetServiceAccounts(cfg) {
-  const r = await aa26Fetch(cfg, "/api/v1/service-accounts?per_page=100");
+async function aaGetServiceAccounts(cfg) {
+  const r = await aaFetch(cfg, "/api/v1/service-accounts?per_page=100");
   return r.ok ? (r.body.data || []) : [];
 }
 
-async function aa26CreateServiceAccount(cfg, sa) {
-  // V2.8.0-alpha-fix: Real payload shape captured from AA26 UI on 2026-05-21.
+async function aaCreateServiceAccount(cfg, sa) {
+  // V2.8.0-alpha-fix: Real payload shape captured from AA UI on 2026-05-21.
   // NOT wrapped in {service_account: {...}}. parameters defines schema, values has actual data.
-  return await aa26Fetch(cfg, "/api/v1/service-accounts", { method:"POST", body: sa });
+  return await aaFetch(cfg, "/api/v1/service-accounts", { method:"POST", body: sa });
 }
 
-async function aa26CreateSource(cfg, src) {
-  return await aa26Fetch(cfg, "/api/v1/sources", { method:"POST", body: src });
+async function aaCreateSource(cfg, src) {
+  return await aaFetch(cfg, "/api/v1/sources", { method:"POST", body: src });
 }
 
-async function aa26GetSources(cfg) {
-  const r = await aa26Fetch(cfg, "/api/v1/sources?per_page=100");
+async function aaGetSources(cfg) {
+  const r = await aaFetch(cfg, "/api/v1/sources?per_page=100");
   return r.ok ? (r.body.data || []) : [];
 }
 
-async function aa26CreateScan(cfg, scan) {
-  return await aa26Fetch(cfg, "/api/v1/scans", { method:"POST", body: scan });
+async function aaCreateScan(cfg, scan) {
+  return await aaFetch(cfg, "/api/v1/scans", { method:"POST", body: scan });
 }
 
-async function aa26GetScans(cfg) {
-  const r = await aa26Fetch(cfg, "/api/v1/scans?per_page=100");
+async function aaGetScans(cfg) {
+  const r = await aaFetch(cfg, "/api/v1/scans?per_page=100");
   return r.ok ? (r.body.data || []) : [];
 }
 
@@ -3289,9 +3292,9 @@ async function aa26GetScans(cfg) {
 // not routed. Left the attempt in (harmless, and picks it back up automatically if a future AA
 // version restores it) but the error message below reflects this finding instead of inviting
 // another round of guessing the request shape.
-async function aa26SimulateExecution(cfg, scanId, scanType) {
+async function aaSimulateExecution(cfg, scanId, scanType) {
   if (!scanId) return { ok:false, error:`no scan ID provided — skipping rather than sending a malformed request` };
-  const create = await aa26Fetch(cfg, "/api/v1/scan-executions", { method:"POST", body: { scanId: scanId } });
+  const create = await aaFetch(cfg, "/api/v1/scan-executions", { method:"POST", body: { scanId: scanId } });
   if (!create.ok) {
     if (create.status === 404 && !create.body) {
       return { ok:false, error:`HTTP 404 (empty body) — confirmed this AA version doesn't support creating scan-executions via REST API at all (checked multiple paths/payload shapes/OPTIONS live). Not fixable from this side; Scan Executions page will stay empty until a real scan runs, or until this is populated directly via Postgres (would need scan_executions table schema — not yet investigated).` };
@@ -3300,31 +3303,31 @@ async function aa26SimulateExecution(cfg, scanId, scanType) {
   }
   const execId = create.body?.id || create.body?.data?.id || create.body?.execution?.id || create.body?.scanExecution?.id;
   if (!execId) return { ok:false, error:`created but couldn't find execution ID in response: ${JSON.stringify(create.body).slice(0,150)}` };
-  const toRunning = await aa26Fetch(cfg, `/api/v1/scan-executions/${execId}`, { method:"PATCH", body: { status: "running" } });
+  const toRunning = await aaFetch(cfg, `/api/v1/scan-executions/${execId}`, { method:"PATCH", body: { status: "running" } });
   if (!toRunning.ok) return { ok:false, error:`pending→running failed: ${toRunning.status}`, execId };
-  const toCompleted = await aa26Fetch(cfg, `/api/v1/scan-executions/${execId}`, { method:"PATCH", body: { status: "completed" } });
+  const toCompleted = await aaFetch(cfg, `/api/v1/scan-executions/${execId}`, { method:"PATCH", body: { status: "completed" } });
   if (!toCompleted.ok) return { ok:false, error:`running→completed failed: ${toCompleted.status}`, execId };
   return { ok:true, execId };
 }
 
-async function aa26GetScanExecutions(cfg, scanId) {
+async function aaGetScanExecutions(cfg, scanId) {
   const path = scanId ? `/api/v1/scan-executions?scanId=${scanId}&per_page=100` : `/api/v1/scan-executions?per_page=100`;
-  const r = await aa26Fetch(cfg, path);
+  const r = await aaFetch(cfg, path);
   return r.ok ? (r.body.data || []) : [];
 }
 
-// ── AA26 Config: Delete helpers (v2.8.0 — Wipe support)
-async function aa26DeleteScanExecution(cfg, id) { return await aa26Fetch(cfg, `/api/v1/scan-executions/${id}`, {method:"DELETE"}); }
-async function aa26DeleteScan(cfg, id) { return await aa26Fetch(cfg, `/api/v1/scans/${id}`, {method:"DELETE"}); }
-async function aa26DeleteSource(cfg, id) { return await aa26Fetch(cfg, `/api/v1/sources/${id}`, {method:"DELETE"}); }
-// v3.3.14: aa26DeleteSourceGroup removed — /api/v1/source-groups confirmed 404 on this AA
-// version (see aa26GeneratePostSetupSQL's comment), so it had no caller left.
-async function aa26DeleteServiceAccount(cfg, id) { return await aa26Fetch(cfg, `/api/v1/service-accounts/${id}`, {method:"DELETE"}); }
+// ── AA Config: Delete helpers (v2.8.0 — Wipe support)
+async function aaDeleteScanExecution(cfg, id) { return await aaFetch(cfg, `/api/v1/scan-executions/${id}`, {method:"DELETE"}); }
+async function aaDeleteScan(cfg, id) { return await aaFetch(cfg, `/api/v1/scans/${id}`, {method:"DELETE"}); }
+async function aaDeleteSource(cfg, id) { return await aaFetch(cfg, `/api/v1/sources/${id}`, {method:"DELETE"}); }
+// v3.3.14: aaDeleteSourceGroup removed — /api/v1/source-groups confirmed 404 on this AA
+// version (see aaGeneratePostSetupSQL's comment), so it had no caller left.
+async function aaDeleteServiceAccount(cfg, id) { return await aaFetch(cfg, `/api/v1/service-accounts/${id}`, {method:"DELETE"}); }
 
-// ── AA26 Config: Generate post-setup SQL command for Postgres fixup
+// ── AA Config: Generate post-setup SQL command for Postgres fixup
 // Dynamically builds kubectl one-liner using real UUIDs from the orchestrator run.
 // v3.3.14: removed the source-groups SQL entirely (was Part 1 here) — confirmed live on
-// aa26testing that it's not a Postgres-vs-REST question at all, it's gone on both sides:
+// a test instance that it's not a Postgres-vs-REST question at all, it's gone on both sides:
 // `\dt` showed no source_groups table (v3.3.13), and GET/OPTIONS against
 // /api/v1/source-groups both came back 404 (Allow: null on OPTIONS — no route exists to
 // discover, the same strongest-signal check used to confirm scan-execution creation was
@@ -3333,9 +3336,9 @@ async function aa26DeleteServiceAccount(cfg, id) { return await aa26Fetch(cfg, `
 // was replaced by a general tagging system rather than 1:1 renamed — but that's a
 // different feature to build, not a fix to this one, so left for a future session to
 // pick up deliberately rather than guessed at here.
-function aa26GeneratePostSetupSQL(executions, cfg, mipLabelData) {
+function aaGeneratePostSetupSQL(executions, cfg, mipLabelData) {
   // Part 1b: v3.0.3 — MIP Labels (synthetic insertion for demo purposes)
-  // Real AA26 pulls these from a connected Entra tenant via Microsoft Graph.
+  // Real AA pulls these from a connected Entra tenant via Microsoft Graph.
   // For the demo we INSERT them directly with deterministic UUIDs so the REST PUT
   // (done in Phase 6 of the orchestrator) can reference them.
   //
@@ -3505,11 +3508,11 @@ END $${tag}$;`;
   };
 }
 
-// ── AA26 Config: Wipe configuration (reverse dependency order)
+// ── AA Config: Wipe configuration (reverse dependency order)
 // mode="demo" — only items matching config plan names
 // mode="all"  — ALL configuration content (complete clean slate, preserves service accounts only)
-async function aa26WipeConfig(cfg, log, mode="demo") {
-  const plan = aa26ConfigPlan(cfg);
+async function aaWipeConfig(cfg, log, mode="demo") {
+  const plan = aaConfigPlan(cfg);
   const demoSourceNames = new Set(plan.sources.map(s => s.name));
   const demoScanNames = new Set(plan.scans.map(s => s.name));
   // v3.1.0: tracked IDs from prior inject runs (persisted in cfg.history) — most reliable identification,
@@ -3531,7 +3534,7 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   // Hardcoded fallback patterns — catches legacy defaults + standard naming conventions
   // across all regions/verticals
   const DEMO_SOURCE_PATTERNS = [
-    /^CloudLab AD - dc01$/,
+    /^.+ AD - dc01$/,                                // any domain prefix (also catches sources named by earlier versions)
     /^Windows FS - fs01(\..+)?$/,
     /^Windows FS — Local Users & Groups$/,
     /^.+ Entra ID$/,                                 // matches any domain prefix
@@ -3539,7 +3542,7 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
     ...dynamicFsSourcePatterns,
   ];
   const DEMO_SCAN_PATTERNS = [
-    /^CloudLab AD - dc01 - Identity Sync$/,
+    /^.+ AD - dc01 - Identity Sync$/,
     /^.+ Entra ID - Sync$/,
     /^Windows FS - fs01(\..+)? - Sync$/,
     /^Windows FS — Local Users & Groups - Sync$/,
@@ -3558,12 +3561,12 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
 
   // Phase 1: Delete scan executions
   log("→ Wiping scan executions...");
-  const allScans = await aa26GetScans(cfg);
+  const allScans = await aaGetScans(cfg);
   const targetScans = isAll ? allScans : allScans.filter(s => { const m = isDemoScan(s); if (m && trackedScanIds.has(s.id)) stats.trackedScanUsed++; return m; });
   for (const scan of targetScans) {
-    const execs = await aa26GetScanExecutions(cfg, scan.id);
+    const execs = await aaGetScanExecutions(cfg, scan.id);
     for (const ex of execs) {
-      const r = await aa26DeleteScanExecution(cfg, ex.id);
+      const r = await aaDeleteScanExecution(cfg, ex.id);
       if (r.ok || r.status === 204) { log(`  ✓ Deleted execution ${ex.id.slice(0,8)} (${scan.name})`); stats.execDel++; }
       else { log(`  ✗ Failed to delete execution ${ex.id.slice(0,8)}: HTTP ${r.status}`); stats.errors++; }
     }
@@ -3572,33 +3575,33 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   // Phase 2: Delete scans
   log("→ Wiping scans...");
   for (const scan of targetScans) {
-    const r = await aa26DeleteScan(cfg, scan.id);
+    const r = await aaDeleteScan(cfg, scan.id);
     if (r.ok || r.status === 204) { log(`  ✓ Deleted scan "${scan.name}"${trackedScanIds.has(scan.id)?' [tracked]':''}`); stats.scanDel++; }
     else { log(`  ✗ Failed to delete scan "${scan.name}": HTTP ${r.status}`); stats.errors++; }
   }
 
   // Phase 3: Delete sources
   log("→ Wiping sources...");
-  const allSources = await aa26GetSources(cfg);
+  const allSources = await aaGetSources(cfg);
   const targetSources = isAll ? allSources : allSources.filter(s => { const m = isDemoSource(s); if (m && trackedSourceIds.has(s.id)) stats.trackedSrcUsed++; return m; });
   for (const src of targetSources) {
-    const r = await aa26DeleteSource(cfg, src.id);
+    const r = await aaDeleteSource(cfg, src.id);
     if (r.ok || r.status === 204) { log(`  ✓ Deleted source "${src.name}"${trackedSourceIds.has(src.id)?' [tracked]':''}`); stats.srcDel++; }
     else { log(`  ✗ Failed to delete source "${src.name}": HTTP ${r.status}`); stats.errors++; }
   }
 
   // v3.3.14: Phase 4 ("Delete source groups") removed — confirmed live that
   // /api/v1/source-groups 404s on this AA version, so this was always a no-op wipe of an
-  // always-empty list (aa26Fetch failing silently open). See aa26GeneratePostSetupSQL's
+  // always-empty list (aaFetch failing silently open). See aaGeneratePostSetupSQL's
   // comment for the full investigation.
   log("");
   // Phase 4: Delete service accounts (Full Reset only)
   stats.saDel = 0;
   if (isAll) {
     log("→ Wiping service accounts...");
-    const allSAs = await aa26GetServiceAccounts(cfg);
+    const allSAs = await aaGetServiceAccounts(cfg);
     for (const sa of allSAs) {
-      const r = await aa26DeleteServiceAccount(cfg, sa.id);
+      const r = await aaDeleteServiceAccount(cfg, sa.id);
       if (r.ok || r.status === 204) { log(`  ✓ Deleted service account "${sa.name}"`); stats.saDel++; }
       else if (r.status === 409) { log(`  ⊘ Service account "${sa.name}" has dependencies — delete sources first`); stats.errors++; }
       else { log(`  ✗ Failed to delete service account "${sa.name}": HTTP ${r.status}`); stats.errors++; }
@@ -3637,7 +3640,7 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
   // Generate cleanup SQL for the mip_labels table — the user must run this via kubectl
   // (Demo mode: labels for ALL Entra sources we know about. Full mode: all rows.)
   // v3.0.7: multi-tenant — find ALL Entra sources, not just the first.
-  const allSourcesForWipe = await aa26GetSources(cfg);
+  const allSourcesForWipe = await aaGetSources(cfg);
   const entraSourcesForWipe = allSourcesForWipe.filter(s => {
     const t = (s.sourceTypeName || s.source_type_name || s.sourceType?.name || s.source_type?.name || '').toLowerCase();
     return t.includes('entra') || t.includes('azure');
@@ -3667,8 +3670,8 @@ async function aa26WipeConfig(cfg, log, mode="demo") {
 }
 
 // Full v2.8.0 configuration plan — Service Accounts → Sources → Scans
-// All payloads validated against live AA26 lab on 2026-05-21
-function aa26ConfigPlan(cfg) {
+// All payloads validated against live AA lab on 2026-05-21
+function aaConfigPlan(cfg) {
   const domain = cfg.global?.domainName || "demo";
   const fqdn = cfg.global?.domainFqdn || "demo.local";
   const tenantId = cfg.global?.tenantId || "00000000-0000-0000-0000-000000000000";
@@ -3685,7 +3688,7 @@ function aa26ConfigPlan(cfg) {
           {key:"username", label:"Username", type:"text", description:"", required:true},
           {key:"password", label:"Password", type:"hidden", description:"", required:true},
         ],
-        values: { username: `${domain}\\administrator`, password: "DemoP@ssw0rd!" },
+        values: { username: `${domain}\\administrator`, password: "DEMO-PLACEHOLDER-NOT-A-REAL-PASSWORD" },
       },
       {
         name: "Entra Reg App",
@@ -3697,10 +3700,10 @@ function aa26ConfigPlan(cfg) {
         values: { client_secret: "DemoSecret_Placeholder" },
       },
       {
-        // v3.1.2: AA26 now self-generates the certificate ("Generate for me" — a
+        // v3.1.2: AA now self-generates the certificate ("Generate for me" — a
         // self-signed RSA-2048 cert, 1yr validity) rather than requiring one be
         // submitted. tenant_id also moved from root into values. Confirmed live
-        // against AA26 v1.1.5: no private_key is sent at all — the server creates
+        // against AA v1.1.5: no private_key is sent at all — the server creates
         // both halves of the keypair on save. One less thing to fake for a demo.
         name: "SPO Reg App",
         service_account_type: "client_id_certificate",
@@ -3713,7 +3716,7 @@ function aa26ConfigPlan(cfg) {
     ],
     // Sources reference service accounts by NAME; runtime maps to IDs after SAs are created
     sources: [
-      { name: `CloudLab AD - ${firstAdHost}`, sourceTypeKey: "active-directory", serviceAccountName: "AD Service Account",
+      { name: `${domain} AD - ${firstAdHost}`, sourceTypeKey: "active-directory", serviceAccountName: "AD Service Account",
         connectionParameters: { host: firstAdHost, port: 389, domain: fqdn, ignoreSslErrors: false } },
       { name: `Windows FS - ${firstFsHost}`, sourceTypeKey: "cifs", serviceAccountName: "AD Service Account",
         connectionParameters: { host: firstFsHost, port: 445 } },
@@ -3726,7 +3729,7 @@ function aa26ConfigPlan(cfg) {
     ],
     // Scans reference sources by NAME; runtime maps to IDs after Sources are created
     scans: [
-      { name: `CloudLab AD - ${firstAdHost} - Identity Sync`, scan_type: "sync", sourceName: `CloudLab AD - ${firstAdHost}` },
+      { name: `${domain} AD - ${firstAdHost} - Identity Sync`, scan_type: "sync", sourceName: `${domain} AD - ${firstAdHost}` },
       { name: `${domain} Entra ID - Sync`, scan_type: "sync", sourceName: `${domain} Entra ID` },
       // v3.3.4: removed both file-server "Sync" scans — "sync" is an identity-source concept
       // (AD/Entra), file servers don't have identities to sync. Confirmed live: this AA version
@@ -3753,8 +3756,8 @@ function fmtPhaseDuration(ms) {
   return `${s}s`;
 }
 
-async function aa26RunFullConfig(cfg, log) {
-  const plan = aa26ConfigPlan(cfg);
+async function aaRunFullConfig(cfg, log) {
+  const plan = aaConfigPlan(cfg);
   const stats = { saCreated: 0, saSkipped: 0, srcCreated: 0, srcSkipped: 0, scnCreated: 0, scnSkipped: 0, errors: 0 };
   // v3.1.0: track every created/touched ID so the wipe can identify demo-managed items by UUID
   // regardless of name/region/hostname customizations between inject and wipe.
@@ -3764,21 +3767,21 @@ async function aa26RunFullConfig(cfg, log) {
   // sending a stale/mismatched UUID here is what caused every source create to HTTP 500.
   let sourceTypes;
   try {
-    sourceTypes = await aa26DiscoverSourceTypes(cfg);
+    sourceTypes = await aaDiscoverSourceTypes(cfg);
     log(`→ Discovered ${Object.keys(sourceTypes).length} source types live: ${Object.keys(sourceTypes).join(', ')}`);
   } catch (e) {
     log(`  ⚠ Source-type discovery failed (${e.message}) — falling back to hardcoded UUIDs from the original lab. These will likely be WRONG for this environment and cause source creation to fail.`);
-    sourceTypes = AA26_SOURCE_TYPES_FALLBACK;
+    sourceTypes = AA_SOURCE_TYPES_FALLBACK;
   }
 
   // ── Service Accounts
   log(`→ Phase 1/5: Service Accounts (${plan.serviceAccounts.length})`);
-  const existingSAs = await aa26GetServiceAccounts(cfg);
+  const existingSAs = await aaGetServiceAccounts(cfg);
   const saNameToId = {};
   existingSAs.forEach(s => { saNameToId[s.name] = s.id; });
   for (const sa of plan.serviceAccounts) {
     if (saNameToId[sa.name]) { log(`  ⊘ Service Account "${sa.name}" exists (${saNameToId[sa.name]})`); createdIds.serviceAccountIds.push(saNameToId[sa.name]); stats.saSkipped++; continue; }
-    const r = await aa26CreateServiceAccount(cfg, sa);
+    const r = await aaCreateServiceAccount(cfg, sa);
     if (r.ok) { saNameToId[sa.name] = r.body.id; createdIds.serviceAccountIds.push(r.body.id); log(`  ✓ Created "${sa.name}" (${r.body.id})`); stats.saCreated++; }
     else { log(`  ✗ Failed "${sa.name}": HTTP ${r.status} — ${JSON.stringify(r.body).slice(0,180)}`); stats.errors++; }
   }
@@ -3787,7 +3790,7 @@ async function aa26RunFullConfig(cfg, log) {
   // v3.0.9: Time Phase 2 (Sources) — typically the slowest phase along with Phase 4
   const phase2Start = Date.now();
   log(`→ Phase 2/5: Sources (${plan.sources.length})`);
-  const existingSrcs = await aa26GetSources(cfg);
+  const existingSrcs = await aaGetSources(cfg);
   const srcNameToId = {};
   existingSrcs.forEach(s => { srcNameToId[s.name] = s.id; });
   for (const src of plan.sources) {
@@ -3797,7 +3800,7 @@ async function aa26RunFullConfig(cfg, log) {
     const sourceTypeId = sourceTypes[src.sourceTypeKey];
     if (!sourceTypeId) { log(`  ⊘ Source "${src.name}": source type "${src.sourceTypeKey}" not available via API in this environment — skipping (not an error, just not creatable this way)`); continue; }
     const payload = { name: src.name, sourceTypeId, serviceAccountId: saId, connectionParameters: src.connectionParameters };
-    const r = await aa26CreateSource(cfg, payload);
+    const r = await aaCreateSource(cfg, payload);
     if (r.ok) {
       const srcId = r.body?.id || r.body?.data?.id;
       if (!srcId) { log(`  ⚠ Created "${src.name}" but couldn't find its ID in the response — Phase 3 (Scans) will treat it as missing. Raw response: ${JSON.stringify(r.body).slice(0,200)}`); }
@@ -3811,7 +3814,7 @@ async function aa26RunFullConfig(cfg, log) {
 
   // ── Scans
   log(`→ Phase 3/5: Scans (${plan.scans.length})`);
-  const existingScans = await aa26GetScans(cfg);
+  const existingScans = await aaGetScans(cfg);
   const scanByName = {};
   existingScans.forEach(s => { scanByName[s.name] = s; });
   const createdScanIds = [];
@@ -3834,7 +3837,7 @@ async function aa26RunFullConfig(cfg, log) {
     // v3.1.2: Scan API rewritten to camelCase — source_id became target:{mode,sourceIds:[]},
     // and the cron_expression/cron_time_zone fields are dropped entirely (not just empty)
     // when the schedule is manual. Confirmed live via intercept-and-abort against a real
-    // AA26 v1.1.5 lab. cronEnabled:false keeps every scan idle — never auto-runs against
+    // AA v1.1.5 lab. cronEnabled:false keeps every scan idle — never auto-runs against
     // the fake demo hosts. NOTE: "sync" as a scanType value is carried over unverified —
     // access_scan was directly confirmed live, sync/sensitive_data_scan were not re-tested
     // this pass; if identity-sync scans fail to create, check this value first.
@@ -3843,7 +3846,7 @@ async function aa26RunFullConfig(cfg, log) {
       target: { mode: "sources", sourceIds: [srcId] },
       cronEnabled: false,
     };
-    const r = await aa26CreateScan(cfg, payload);
+    const r = await aaCreateScan(cfg, payload);
     if (r.ok) {
       // v3.3.4: Sources' POST response has a flat r.body.id and that's always worked — but
       // Scans' POST response does NOT, confirmed live (every created scan logged "(undefined)"
@@ -3884,17 +3887,17 @@ async function aa26RunFullConfig(cfg, log) {
   log(`  ⏱ Phase 4 completed in ${fmtPhaseDuration(stats.phase4Ms)} (0 via REST — expected; see Phase 5)`);
 
   // ── Phase 6 (v3.0.7): MIP Labels — multi-tenant support
-  // Real AA26 pulls labels from a connected Entra tenant via Microsoft Graph. For demo
+  // Real AA pulls labels from a connected Entra tenant via Microsoft Graph. For demo
   // purposes, we INSERT synthetic labels via Postgres for EVERY Entra source found,
-  // and configure the sensitive-data-config via REST so the AA26 UI shows them.
-  // The sensitive-data-config row is global (one per AA26 instance), so the PUT uses
+  // and configure the sensitive-data-config via REST so the AA UI shows them.
+  // The sensitive-data-config row is global (one per AA instance), so the PUT uses
   // the FIRST Entra source as the "primary" tenant. Switching the tenant dropdown in
-  // the AA26 UI re-PUTs mip_entra_source_id — labels for ALL tenants stay valid because
+  // the AA UI re-PUTs mip_entra_source_id — labels for ALL tenants stay valid because
   // we use the same label_id strings (public/internal/confidential/highly_confidential)
   // for every tenant.
   let mipLabelData = null;
   if (cfg.sd?.mipLabels?.enabled) {
-    const allSources = await aa26GetSources(cfg);
+    const allSources = await aaGetSources(cfg);
     const entraSources = allSources.filter(s => {
       const t = (s.sourceTypeName || s.source_type_name || s.sourceType?.name || s.source_type?.name || '').toLowerCase();
       return t.includes('entra') || t.includes('azure');
@@ -3918,7 +3921,7 @@ async function aa26RunFullConfig(cfg, log) {
       mipLabelData = { sources: sourcesWithLabels };
 
       // Build data_type_mappings using the user's configured mappings (global, not per-tenant).
-      // v3.0.6 fix: AA26's /api/v1/mip-labels GET returns each label with `id` set to the
+      // v3.0.6 fix: AA's /api/v1/mip-labels GET returns each label with `id` set to the
       // label_id STRING ("public", "internal", etc.), NOT the row's UUID primary key.
       // The frontend matches mappings.mip_label_id against that string id, so we must send
       // the label_id string here — sending the UUID makes all 11 mappings show as "(removed)".
@@ -3930,7 +3933,7 @@ async function aa26RunFullConfig(cfg, log) {
       });
 
       // PUT /api/v1/sensitive-data-config — wires up the GLOBAL mappings + PRIMARY Entra source.
-      // The "primary" tenant is the first Entra source found; user can switch in AA26 UI.
+      // The "primary" tenant is the first Entra source found; user can switch in AA UI.
       const primarySource = entraSources[0];
       const totalLabelRows = sourcesWithLabels.reduce((sum, s) => sum + s.labels.length, 0);
       const putBody = {
@@ -3972,13 +3975,13 @@ async function aa26RunFullConfig(cfg, log) {
   }
 
   // ── Phase 5: Generate post-setup SQL command (timestamp fixup + multi-execution history + MIP labels)
-  // The AA26 REST API cannot backdate timestamps, insert multiple executions, or insert MIP labels.
-  // This generates a kubectl command the user runs on the AA26 server.
+  // The AA REST API cannot backdate timestamps, insert multiple executions, or insert MIP labels.
+  // This generates a kubectl command the user runs on the AA server.
   // v3.3.14: no longer generates source-groups SQL — confirmed live (both no Postgres
   // source_groups table and a 404 on /api/v1/source-groups) that this AA version has
-  // nothing for it to link to. See the comment above aa26GeneratePostSetupSQL.
+  // nothing for it to link to. See the comment above aaGeneratePostSetupSQL.
   if (newExecs.length > 0 || mipLabelData) {
-    const {cmd, summary} = aa26GeneratePostSetupSQL(newExecs, cfg, mipLabelData);
+    const {cmd, summary} = aaGeneratePostSetupSQL(newExecs, cfg, mipLabelData);
     stats.postSetupCmd = cmd;
     log(``);
     log(`→ Phase 5/5: Post-Setup SQL (copy to AA server)`);
@@ -4478,19 +4481,19 @@ function StepConnection({cfg,setCfg,t,toast}){
   const [fullSchemaStatus,setFullSchemaStatus]=useState(null);
   const [fullSchemaMsg,setFullSchemaMsg]=useState("");
   const [fullSchemaData,setFullSchemaData]=useState(null);
-  const [aa26SessStatus,setAa26SessStatus]=useState(null);
-  const [aa26SessMsg,setAa26SessMsg]=useState("");
+  const [aaSessStatus,setAaSessStatus]=useState(null);
+  const [aaSessMsg,setAaSessMsg]=useState("");
   const u=(f,v)=>setCfg(p=>({...p,connection:{...p.connection,[f]:v}}));
 
   const testMetabase=async()=>{
     setMbStatus("testing");setMbInfo("");
     try{
       // v3.1.2: Direct Metabase username/password login (POST /metabase/api/session)
-      // now returns a flat 403 in this AA26 version — confirmed live it's blocked at
-      // the gateway, not a Metabase auth error. AA26 mediates Metabase auth via JWT SSO
-      // instead: exchange the caller's own (already-authenticated) AA26 session for a
+      // now returns a flat 403 in this AA version — confirmed live it's blocked at
+      // the gateway, not a Metabase auth error. AA mediates Metabase auth via JWT SSO
+      // instead: exchange the caller's own (already-authenticated) AA session for a
       // Metabase one. mb_user/mb_pass are no longer used — this only works when the
-      // browser already has a live AA26 session (same-origin deployment, as designed).
+      // browser already has a live AA session (same-origin deployment, as designed).
       const ssoResp=await fetch(cfg.connection.url+'/api/v1/auth/metabase/sso?response=json',{credentials:'include'});
       if(!ssoResp.ok) throw new Error(`AA SSO endpoint returned HTTP ${ssoResp.status} — make sure you're logged into AA in this browser tab first.`);
       const ssoJson=await ssoResp.json();
@@ -4591,7 +4594,7 @@ function StepConnection({cfg,setCfg,t,toast}){
         <div className="flex items-center gap-2"><span className={cn("text-sm font-semibold",t.text)}>🔑 Metabase Connection</span><Badge variant="success" t={t}>Recommended</Badge></div>
         <button onClick={()=>setShowGuide(!showGuide)} className={cn("text-xs",t.accent)}>{showGuide?"Hide":"Show"} setup guide</button>
       </div>
-      {/* v3.1.2: this AA26 version blocks direct Metabase username/password login (403 at
+      {/* v3.1.2: this AA version blocks direct Metabase username/password login (403 at
           the gateway) — Metabase auth is now mediated by your existing AA session via
           JWT SSO. No credentials to enter here; just be logged into AA in this browser
           tab and hosted same-origin, then click Connect. */}
@@ -4621,14 +4624,14 @@ function StepConnection({cfg,setCfg,t,toast}){
       </div>}
     </Card>
 
-    {/* AA26 API Authentication (v2.8.0-alpha) — for Configuration page population */}
+    {/* AA API Authentication (v2.8.0-alpha) — for Configuration page population */}
     <Card t={t}>
       {(() => {
         const sameOrigin = typeof window!=="undefined" && window.location.hostname === cfg.connection.aa26Host;
         return <>
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2"><span className={cn("text-sm font-semibold",t.text)}>🔐 AA API Authentication</span>{sameOrigin?<Badge variant="success" t={t}>Auto Mode (Same-Origin)</Badge>:<Badge variant="danger" t={t}>Cross-Origin — Limited</Badge>}</div>
-          <span className={cn("text-xs",aa26SessStatus==="ok"?t.success:t.textFaint)}>{aa26SessStatus==="ok"?"✓ Verified":aa26SessStatus==="err"?"✗ Invalid":"Not verified"}</span>
+          <span className={cn("text-xs",aaSessStatus==="ok"?t.success:t.textFaint)}>{aaSessStatus==="ok"?"✓ Verified":aaSessStatus==="err"?"✗ Invalid":"Not verified"}</span>
         </div>
         {sameOrigin
           ? <p className={cn("text-xs mb-2",t.textFaint)}>✨ <b className={t.success}>Same-origin mode active.</b> Sign in to AA in any tab on this browser, then click <b>Detect Session</b>. The browser auto-attaches cookies; no paste needed.</p>
@@ -4639,27 +4642,27 @@ function StepConnection({cfg,setCfg,t,toast}){
             </div>
         }
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-2">
-          <Input label="AA Host" value={cfg.connection.aa26Host} onChange={v=>u("aa26Host",v)} placeholder="appaa.cloud.lab" t={t}/>
+          <Input label="AA Host" value={cfg.connection.aa26Host} onChange={v=>u("aa26Host",v)} placeholder="aa.example.com" t={t}/>
           {!sameOrigin&&<Input label="Session Cookie (_dspm_session) — may be ignored by browser" value={cfg.connection.aa26SessionCookie} onChange={v=>u("aa26SessionCookie",v)} placeholder="optional: paste cookie value" type="password" t={t}/>}
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={async()=>{
-            setAa26SessStatus("checking");setAa26SessMsg("Verifying session...");
-            const r=await aa26VerifySession(cfg);
+            setAaSessStatus("checking");setAaSessMsg("Verifying session...");
+            const r=await aaVerifySession(cfg);
             if(r.ok){
-              setAa26SessStatus("ok");setAa26SessMsg(`Signed in as ${r.user.email} (${r.user.role})`);
+              setAaSessStatus("ok");setAaSessMsg(`Signed in as ${r.user.email} (${r.user.role})`);
               // v3.2.0: discover the real Sensitive Data Patterns catalog now that we have a session —
               // used by the Classification tab and the cifs/spo sensitive-data generators.
               try{
-                const cat=await aa26DiscoverSensitiveDataCatalog(cfg);
+                const cat=await aaDiscoverSensitiveDataCatalog(cfg);
                 setCfg(p=>({...p,_sdCatalog:cat}));
-                setAa26SessMsg(`Signed in as ${r.user.email} (${r.user.role}) — ${cat.groups.length} pattern groups, ${cat.patternCount} patterns discovered`);
+                setAaSessMsg(`Signed in as ${r.user.email} (${r.user.role}) — ${cat.groups.length} pattern groups, ${cat.patternCount} patterns discovered`);
               }catch(e){ /* non-fatal — generator falls back to group-name-only matching */ }
-              // v3.2.0: detect the connected AA26 instance's real product version (source-types
-              // responses carry it) so a mismatch against AA26_SUPPORTED_VERSION can be surfaced
+              // v3.2.0: detect the connected AA instance's real product version (source-types
+              // responses carry it) so a mismatch against AA_SUPPORTED_VERSION can be surfaced
               // before it causes confusing data-injection failures.
               try{
-                const stRes=await aa26Fetch(cfg,"/api/v1/source-types");
+                const stRes=await aaFetch(cfg,"/api/v1/source-types");
                 const liveVer=stRes.ok && stRes.body?.data?.[0]?.version;
                 if(liveVer) setCfg(p=>({...p,connection:{...p.connection,aa26LiveVersion:liveVer}}));
               }catch(e){ /* non-fatal — version badge just stays unknown */ }
@@ -4668,11 +4671,11 @@ function StepConnection({cfg,setCfg,t,toast}){
               const hint = sameOrigin
                 ? " — try signing into AA in another tab first, then re-click."
                 : " — likely cause: browser blocked cross-origin cookies. Host this app on the AA origin.";
-              setAa26SessStatus("err");setAa26SessMsg(r.error+hint);
+              setAaSessStatus("err");setAaSessMsg(r.error+hint);
             }
           }} className={cn("text-xs px-3 py-1.5 rounded-lg",t.btnAccent)}>{sameOrigin?"Detect Session":"Try Verify (may fail cross-origin)"}</button>
           <a href={`https://${cfg.connection.aa26Host}/`} target="_blank" rel="noopener" className={cn("text-xs underline",t.accent)}>Open AA sign-in →</a>
-          {aa26SessMsg&&<span className={cn("text-xs",aa26SessStatus==="ok"?t.success:aa26SessStatus==="err"?t.danger:t.textMuted)}>{aa26SessMsg}</span>}
+          {aaSessMsg&&<span className={cn("text-xs",aaSessStatus==="ok"?t.success:aaSessStatus==="err"?t.danger:t.textMuted)}>{aaSessMsg}</span>}
         </div>
         <details className="mt-3">
           <summary className={cn("text-xs cursor-pointer",t.accent)}>Why doesn't cross-origin cookie paste work? →</summary>
@@ -4828,7 +4831,7 @@ function StepConnection({cfg,setCfg,t,toast}){
           <span className={cn("text-xs font-semibold uppercase tracking-wider",t.accent)}>Other useful credentials</span>
           <div className="grid grid-cols-3 gap-2">
             {[
-              ["AA Web Admin","administrator@cloud.lab","AD password"],
+              ["AA Web Admin","administrator@<your-domain>","AD password"],
               ["Bootstrap Admin","admin@dspm.local","Installer output"],
               ["Metabase API","api@metabase.local","MB_API_USER_PASSWORD env"],
             ].map(([role,user,src],i)=>(
@@ -4874,7 +4877,7 @@ function StepConnection({cfg,setCfg,t,toast}){
             } else checks.push({label:"Metabase API",status:"fail",detail:"Not connected — click Connect on Metabase API Login above"});
             setHealthChecks([...checks]);
             try{
-              const v=await aa26VerifySession(cfg);
+              const v=await aaVerifySession(cfg);
               checks.push({label:"AA REST API",status:v.ok?"ok":"warn",detail:v.ok?`Authenticated as ${v.user.email}`:v.error});
             }catch(e){checks.push({label:"AA REST API",status:"fail",detail:e.message});}
             setHealthChecks([...checks]);
@@ -5306,13 +5309,13 @@ function StepDataSources({cfg,setCfg,t}){
 }
 
 function StepSensitiveData({cfg,setCfg,t}){
-  // v3.2.0: "Taxonomies" renamed to match AA26's own terminology — "Sensitive Data Patterns",
+  // v3.2.0: "Taxonomies" renamed to match AA's own terminology — "Sensitive Data Patterns",
   // organized as Pattern Groups containing individual Patterns. The list of groups/patterns
-  // itself is now discovered LIVE from AA26 (via GraphQL, see aa26DiscoverSensitiveDataCatalog)
+  // itself is now discovered LIVE from AA (via GraphQL, see aaDiscoverSensitiveDataCatalog)
   // instead of a hardcoded fictional list, so generated data always matches what a user would
-  // actually see on AA26's own Sensitive Data Patterns page. Falls back to the 11 known built-in
-  // group names (confirmed live against AA26 v1.1.5) until a session connects and discovers
-  // the real catalog — which also picks up any custom groups the user has added in AA26 itself.
+  // actually see on AA's own Sensitive Data Patterns page. Falls back to the 11 known built-in
+  // group names (confirmed live against AA v1.1.5) until a session connects and discovers
+  // the real catalog — which also picks up any custom groups the user has added in AA itself.
   const catalog=cfg._sdCatalog;
   const FALLBACK_GROUPS=["CCPA","CMMC","Credentials","Financial Records","GDPR","GDPR Restricted","GLBA","HIPAA","PCI DSS","PHI","PII"];
   const allGroups=catalog?.groups?.length?catalog.groups:FALLBACK_GROUPS;
@@ -5489,26 +5492,26 @@ function StepGenerate({cfg,setCfg,onGenerate,results,progress,generating,t,injec
   },[wiping]);
 
   const WIPE_TABLES=["cifs_object","cifs_permission","cifs_share_permission","cifs_sensitive_data","sharepoint_online_objects","sharepoint_online_permissions","sharepoint_online_shared_links","sharepoint_sensitive_data","netwrix_activity_monitor_json","netwrix_activity_monitor_spo","netwrix_activity_monitor_copilot","netwrix_activity_monitor_ad","netwrix_activity_monitor_entra","netwrix_activity_monitor_leef","classifications","active_directory_user","active_directory_group","active_directory_group_membership","active_directory_risk_catalog","active_directory_effective_group_membership","localgroups_group","localgroups_group_members","localgroups_effective_group_membership","localgroups_user","crawl_completions"];
-  // v2 entity-model tables — populated by real AA26 scans, preserved by default. Wiped only when "Full Reset" is selected.
+  // v2 entity-model tables — populated by real AA scans, preserved by default. Wiped only when "Full Reset" is selected.
   const WIPE_V2_TABLES=["entities","principals","permissions","memberships","system_objects","ownerships","permission_sets","permission_grant_rules","sensitive_data"];
   const [preserveV2,setPreserveV2]=useState(true);
-  const [aa26ConfigLog,setAa26ConfigLog]=useState([]);
-  const [aa26ConfigBusy,setAa26ConfigBusy]=useState(false);
-  const [aa26ConfigPhase,setAa26ConfigPhase]=useState(0); // v3.0 phase progress (0-5)
+  const [aaConfigLog,setAaConfigLog]=useState([]);
+  const [aaConfigBusy,setAaConfigBusy]=useState(false);
+  const [aaConfigPhase,setAaConfigPhase]=useState(0); // v3.0 phase progress (0-5)
   // v3.0 — UI state
   const [collapseAll,setCollapseAll]=useState(null); // null/true/false
   const [genStats,setGenStats]=useState(null);
   const [showWipeModal,setShowWipeModal]=useState(false); // For ClickHouse wipe
   const [showFullResetModal,setShowFullResetModal]=useState(false);
-  const [aa26PostSetupCmd,setAa26PostSetupCmd]=useState(null);
+  const [aaPostSetupCmd,setAaPostSetupCmd]=useState(null);
   // v3.0.8: Phase 5 SQL application verification
   const [phase5PendingIds,setPhase5PendingIds]=useState([]); // execution IDs that should have totalObjects>0 after SQL runs
   const [phase5Status,setPhase5Status]=useState(null); // null | 'pending' | 'verifying' | 'applied' | 'partial'
   const [phase5VerifyDetails,setPhase5VerifyDetails]=useState(null); // {applied:N, total:N, sample:[...]}
-  const [aa26WipeBusy,setAa26WipeBusy]=useState(false);
-  const [aa26WipeLog,setAa26WipeLog]=useState([]);
-  const [aa26WipeConfirm,setAa26WipeConfirm]=useState(false);
-  const [aa26WipeMode,setAa26WipeMode]=useState("all");
+  const [aaWipeBusy,setAaWipeBusy]=useState(false);
+  const [aaWipeLog,setAaWipeLog]=useState([]);
+  const [aaWipeConfirm,setAaWipeConfirm]=useState(false);
+  const [aaWipeMode,setAaWipeMode]=useState("all");
   // MV inner tables and Views need ALTER DELETE instead of TRUNCATE
   const WIPE_MVS=["mv_effective_permissions","mv_objects","mv_current_objects","mv_group_membership","mv_assigned_permissions","mv_actors","actors","role_entities","computer_entities"];
 
@@ -5588,7 +5591,7 @@ echo "Injection complete!"
 echo "Refresh the AA dashboards to see the data."
 `;
     const b=new Blob([script],{type:"text/x-shellscript"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`inject-${cfg.global.domainName.toLowerCase()}.sh`;a.click();};
-  const downloadConfig=()=>{const b=new Blob([JSON.stringify(cfg,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`aa26-config-${cfg.global.domainName.toLowerCase()}.json`;a.click();};
+  const downloadConfig=()=>{const b=new Blob([JSON.stringify(cfg,null,2)],{type:"application/json"});const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=`aa-demo-config-${cfg.global.domainName.toLowerCase()}.json`;a.click();};
   // v3.3.11: pasting the raw Phase 5 command straight into a live SSH/terminal session was
   // corrupting on real hardware — the heredoc terminator or later fragments of the same paste
   // landed mid-line (confirmed live: EOSQL appeared inside a WHERE clause, scan_executions row
@@ -5598,7 +5601,7 @@ echo "Refresh the AA dashboards to see the data."
   // Same fix as the existing ClickHouse downloadScript() above: wrap the command in a real .sh
   // file. bash reads a file via normal I/O, not simulated paste keystrokes, so this class of
   // corruption can't happen — scp it over and run it, nothing to paste into the live session.
-  const downloadPostSetupScript=()=>{if(!aa26PostSetupCmd)return;const script=`#!/usr/bin/env bash
+  const downloadPostSetupScript=()=>{if(!aaPostSetupCmd)return;const script=`#!/usr/bin/env bash
 # AA Post-Setup SQL — Generated ${new Date().toISOString()}
 # Organization: ${cfg.global.domainName}
 #
@@ -5625,7 +5628,7 @@ echo ""
 # not appended directly, which would break the terminator match and make bash read the rest
 # of this script as SQL input instead of ending the heredoc.
 OUTPUT=$({
-${aa26PostSetupCmd}
+${aaPostSetupCmd}
 } 2>&1)
 echo "$OUTPUT"
 echo ""
@@ -5692,68 +5695,68 @@ fi
             </div>}
           </div>
         </details>
-        {/* AA26 Configuration Wipe — related to Step 5 */}
+        {/* AA Configuration Wipe — related to Step 5 */}
         <details className="mt-1">
           <summary className={cn("text-xs font-semibold cursor-pointer select-none text-red-400")}>🗑️ Wipe AA Configuration <span className={cn("text-[10px] font-normal",t.textFaint)}>(relates to Step 5 — AA Configuration Setup)</span></summary>
           <div className="mt-2 space-y-2">
             <div className="flex items-center gap-3">
-              <label className={cn("text-xs flex items-center gap-1.5 cursor-pointer",aa26WipeMode==="demo"?t.text:t.textFaint)}>
-                <input type="radio" name="wipeMode" value="demo" checked={aa26WipeMode==="demo"} onChange={()=>setAa26WipeMode("demo")} className="accent-amber-500"/>
+              <label className={cn("text-xs flex items-center gap-1.5 cursor-pointer",aaWipeMode==="demo"?t.text:t.textFaint)}>
+                <input type="radio" name="wipeMode" value="demo" checked={aaWipeMode==="demo"} onChange={()=>setAaWipeMode("demo")} className="accent-amber-500"/>
                 <span><b>Demo Only</b> — items matching current config plan names</span>
               </label>
-              <label className={cn("text-xs flex items-center gap-1.5 cursor-pointer",aa26WipeMode==="all"?t.text:t.textFaint)}>
-                <input type="radio" name="wipeMode" value="all" checked={aa26WipeMode==="all"} onChange={()=>setAa26WipeMode("all")} className="accent-red-500"/>
+              <label className={cn("text-xs flex items-center gap-1.5 cursor-pointer",aaWipeMode==="all"?t.text:t.textFaint)}>
+                <input type="radio" name="wipeMode" value="all" checked={aaWipeMode==="all"} onChange={()=>setAaWipeMode("all")} className="accent-red-500"/>
                 <span><b>Full Reset</b> — ALL sources, scans, executions & service accounts</span>
               </label>
             </div>
-            <p className={cn("text-[10px]",t.textFaint)}>{aa26WipeMode==="all"?"Deletes ALL configuration content including service accounts for a completely clean slate.":`Deletes items identified by (a) ${(cfg.history?.injectedAA26?.sourceIds||[]).length} tracked source IDs from prior inject runs, (b) current cfg's expected names, (c) standard demo name patterns across any region/vertical. Service accounts preserved.`}</p>
+            <p className={cn("text-[10px]",t.textFaint)}>{aaWipeMode==="all"?"Deletes ALL configuration content including service accounts for a completely clean slate.":`Deletes items identified by (a) ${(cfg.history?.injectedAA26?.sourceIds||[]).length} tracked source IDs from prior inject runs, (b) current cfg's expected names, (c) standard demo name patterns across any region/vertical. Service accounts preserved.`}</p>
             <div className="flex items-center gap-2">
-              <button onClick={()=>setAa26WipeConfirm(true)} disabled={aa26WipeBusy||aa26ConfigBusy} className={cn("text-xs px-3 py-1.5 rounded-lg font-semibold border transition",aa26WipeMode==="all"?"text-red-400 border-red-500/30 hover:bg-red-500/10":"text-amber-400 border-amber-500/30 hover:bg-amber-500/10",(aa26WipeBusy||aa26ConfigBusy)&&"opacity-50")}>{aa26WipeMode==="all"?"Full Reset...":"Wipe Demo Config..."}</button>
+              <button onClick={()=>setAaWipeConfirm(true)} disabled={aaWipeBusy||aaConfigBusy} className={cn("text-xs px-3 py-1.5 rounded-lg font-semibold border transition",aaWipeMode==="all"?"text-red-400 border-red-500/30 hover:bg-red-500/10":"text-amber-400 border-amber-500/30 hover:bg-amber-500/10",(aaWipeBusy||aaConfigBusy)&&"opacity-50")}>{aaWipeMode==="all"?"Full Reset...":"Wipe Demo Config..."}</button>
             </div>
-            <Modal open={aa26WipeConfirm} onClose={()=>setAa26WipeConfirm(false)} title={aa26WipeMode==="all"?"🗑️ Confirm Full Reset":"🗑️ Confirm Demo Wipe"} t={t} danger>
-              <p className={cn("text-xs mb-2",t.text)}>{aa26WipeMode==="all"?"⚠ This will delete ALL configuration content from AA:":"This will delete demo-created items only:"}</p>
+            <Modal open={aaWipeConfirm} onClose={()=>setAaWipeConfirm(false)} title={aaWipeMode==="all"?"🗑️ Confirm Full Reset":"🗑️ Confirm Demo Wipe"} t={t} danger>
+              <p className={cn("text-xs mb-2",t.text)}>{aaWipeMode==="all"?"⚠ This will delete ALL configuration content from AA:":"This will delete demo-created items only:"}</p>
               <ul className={cn("text-xs mb-3 space-y-0.5 ml-4 list-disc",t.textMuted)}>
                 <li>All Scan Executions</li>
                 <li>All Scans</li>
                 <li>All Sources</li>
-                {aa26WipeMode==="all"&&<li className="text-red-400 font-semibold">All Service Accounts (Full Reset only)</li>}
+                {aaWipeMode==="all"&&<li className="text-red-400 font-semibold">All Service Accounts (Full Reset only)</li>}
               </ul>
-              <p className={cn("text-xs mb-4 italic",t.textFaint)}>{aa26WipeMode==="all"?"Service accounts will need to be recreated. Use this for a completely clean slate.":"Service accounts will be preserved. Items matching the current config plan (domain: "+(cfg.global?.domainName||"demo")+") will be removed."}</p>
+              <p className={cn("text-xs mb-4 italic",t.textFaint)}>{aaWipeMode==="all"?"Service accounts will need to be recreated. Use this for a completely clean slate.":"Service accounts will be preserved. Items matching the current config plan (domain: "+(cfg.global?.domainName||"demo")+") will be removed."}</p>
               <div className="flex items-center justify-end gap-2">
-                <button onClick={()=>setAa26WipeConfirm(false)} className={cn("px-3 py-1.5 rounded-lg text-xs border transition",t.btnSecondary)}>Cancel</button>
+                <button onClick={()=>setAaWipeConfirm(false)} className={cn("px-3 py-1.5 rounded-lg text-xs border transition",t.btnSecondary)}>Cancel</button>
                 <button onClick={async()=>{
-                  const localLogs = [`Starting ${aa26WipeMode==="all"?"FULL":"DEMO"} wipe...`];
-                  const addLog = m => { localLogs.push(m); setAa26WipeLog([...localLogs]); };
-                  setAa26WipeBusy(true);setAa26WipeLog([...localLogs]);setAa26WipeConfirm(false);
+                  const localLogs = [`Starting ${aaWipeMode==="all"?"FULL":"DEMO"} wipe...`];
+                  const addLog = m => { localLogs.push(m); setAaWipeLog([...localLogs]); };
+                  setAaWipeBusy(true);setAaWipeLog([...localLogs]);setAaWipeConfirm(false);
                   let wipeStats = null;
                   try {
-                    const verify = await aa26VerifySession(cfg);
-                    if (!verify.ok) { addLog(`✗ ${verify.error}`); setAa26WipeBusy(false); return; }
+                    const verify = await aaVerifySession(cfg);
+                    if (!verify.ok) { addLog(`✗ ${verify.error}`); setAaWipeBusy(false); return; }
                     addLog(`✓ Authenticated as ${verify.user.email}`);
-                    wipeStats = await aa26WipeConfig(cfg, addLog, aa26WipeMode);
+                    wipeStats = await aaWipeConfig(cfg, addLog, aaWipeMode);
                   } catch(e) { addLog(`✗ Error: ${e.message}`); }
-                  setAa26WipeBusy(false);
+                  setAaWipeBusy(false);
                   // v3.0.2 — if wipe generated a MIP cleanup SQL, surface it in Post-Setup area
-                  if (wipeStats?.mipWipeCmd) setAa26PostSetupCmd(wipeStats.mipWipeCmd);
-                  else setAa26PostSetupCmd(null);
+                  if (wipeStats?.mipWipeCmd) setAaPostSetupCmd(wipeStats.mipWipeCmd);
+                  else setAaPostSetupCmd(null);
                   // v3.0.8: wipe doesn't create new executions, so clear any pending verification state
                   setPhase5PendingIds([]);setPhase5Status(null);setPhase5VerifyDetails(null);
-                  // v3.1.0: clear tracked AA26 IDs after wipe — they no longer exist in AA26
+                  // v3.1.0: clear tracked AA IDs after wipe — they no longer exist in AA
                   if (wipeStats && (wipeStats.srcDel > 0 || wipeStats.scanDel > 0)) {
                     setCfg(p => ({...p, history: {...(p.history||{}), injectedAA26: {serviceAccountIds:[], sourceIds:[], scanIds:[]}}}));
                   }
-                  setRunHistory(prev=>[{type:aa26WipeMode==="all"?"config-wipe-full":"config-wipe-demo",time:new Date().toLocaleString(),rows:0,tables:0,errors:0,logs:[...localLogs]},...prev.slice(0,19)]);
-                  if(toast)toast(`${aa26WipeMode==="all"?"Full Reset":"Demo Wipe"} complete${wipeStats?.mipWipeCmd?" — copy MIP cleanup SQL below":""}`,"success");
-                }} className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition">{aa26WipeMode==="all"?"Yes, Full Reset":"Yes, Wipe Demo"}</button>
+                  setRunHistory(prev=>[{type:aaWipeMode==="all"?"config-wipe-full":"config-wipe-demo",time:new Date().toLocaleString(),rows:0,tables:0,errors:0,logs:[...localLogs]},...prev.slice(0,19)]);
+                  if(toast)toast(`${aaWipeMode==="all"?"Full Reset":"Demo Wipe"} complete${wipeStats?.mipWipeCmd?" — copy MIP cleanup SQL below":""}`,"success");
+                }} className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-red-600 text-white hover:bg-red-700 transition">{aaWipeMode==="all"?"Yes, Full Reset":"Yes, Wipe Demo"}</button>
               </div>
             </Modal>
-            {aa26WipeLog.length>0&&<div>
+            {aaWipeLog.length>0&&<div>
               <div className="flex items-center justify-end gap-2 mb-1">
-                <button onClick={()=>{navigator.clipboard.writeText(aa26WipeLog.join("\n"));}} className={cn("text-[11px] px-2 py-0.5 rounded border transition",t.btnSecondary)}>📋 Copy Log</button>
-                <LogDownloadBtn logs={aa26WipeLog} filename={`aa26-config-wipe-${new Date().toISOString().slice(0,10)}.txt`} t={t}/>
+                <button onClick={()=>{navigator.clipboard.writeText(aaWipeLog.join("\n"));}} className={cn("text-[11px] px-2 py-0.5 rounded border transition",t.btnSecondary)}>📋 Copy Log</button>
+                <LogDownloadBtn logs={aaWipeLog} filename={`aa-demo-config-wipe-${new Date().toISOString().slice(0,10)}.txt`} t={t}/>
               </div>
               <div className={cn("rounded-lg p-2 max-h-36 overflow-y-auto font-mono text-[10px] space-y-0.5",t.codeBlock)}>
-                {aa26WipeLog.map((m,i)=><div key={i} className={m.startsWith("✗")?t.danger:m.startsWith("✓")||m.startsWith("→")?t.textMuted:t.textFaint}>{m}</div>)}
+                {aaWipeLog.map((m,i)=><div key={i} className={m.startsWith("✗")?t.danger:m.startsWith("✓")||m.startsWith("→")?t.textMuted:t.textFaint}>{m}</div>)}
               </div>
             </div>}
           </div>
@@ -5877,7 +5880,7 @@ fi
     {(generating||progress.length>0)&&<Card t={t}><details open>
       <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 3</span>📋 Generation Log {generating?<span className={cn("text-xs animate-pulse ml-2",t.accent)}>⏳ Running...</span>:progress.length>0&&<Badge variant="success" t={t}>✓ Complete</Badge>}</summary>
       <div className="flex items-center justify-end mt-2 mb-2">
-        <LogDownloadBtn logs={progress} filename={`aa26-generation-log-${new Date().toISOString().slice(0,10)}.txt`} t={t}/>
+        <LogDownloadBtn logs={progress} filename={`aa-demo-generation-log-${new Date().toISOString().slice(0,10)}.txt`} t={t}/>
       </div>
       <div className={cn("rounded-lg p-3 max-h-52 overflow-y-auto font-mono text-xs space-y-0.5",t.codeBlock)}>
         {progress.length===0&&generating&&<div className={t.textFaint}>Initializing...</div>}
@@ -5961,7 +5964,7 @@ fi
     {injectLogs.length>0&&<Card t={t}><details open>
       <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 5</span>💉 Injection Log {injecting&&<span className={cn("text-xs animate-pulse ml-2",t.accent)}>⏳ Injecting...</span>} {injectResult&&injectResult.total>0&&<Badge variant="success" t={t}>✓ {fmt(injectResult.total)} rows injected</Badge>} {injectResult&&injectResult.errors>0&&<Badge variant="danger" t={t}>{injectResult.errors} errors</Badge>}</summary>
       <div className="flex items-center justify-end mt-2 mb-2">
-        <LogDownloadBtn logs={injectLogs} filename={`aa26-injection-log-${new Date().toISOString().slice(0,10)}.txt`} t={t}/>
+        <LogDownloadBtn logs={injectLogs} filename={`aa-demo-injection-log-${new Date().toISOString().slice(0,10)}.txt`} t={t}/>
       </div>
       <div className={cn("rounded-lg p-3 max-h-48 overflow-y-auto font-mono text-xs space-y-0.5",t.codeBlock)}>
         {injectLogs.map((m,i)=><div key={i} className={m.includes("Error")||m.includes("fail")?t.danger:t.textMuted}><span className={t.textFaint}>[{String(i+1).padStart(2,"0")}]</span> {m}</div>)}
@@ -5969,40 +5972,40 @@ fi
     </details></Card>}
     </div>
     <div id="step-5">
-    {/* AA26 Configuration Setup (v2.8.0) */}
+    {/* AA Configuration Setup (v2.8.0) */}
     <Card t={t}><details>
-      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 5</span>🛠️ AA Configuration Setup <span className={cn("text-xs font-normal",t.textFaint)}>— Service Accounts, Sources & Scans (Optional)</span> {aa26ConfigBusy&&<span className={cn("text-xs animate-pulse ml-1",t.accent)}>⏳ Running...</span>} {!aa26ConfigBusy&&aa26ConfigLog.length>0&&!aa26ConfigLog.some(m=>m.startsWith("✗"))&&<Badge variant="success" t={t}>✓ Complete</Badge>} {!aa26ConfigBusy&&aa26ConfigLog.some(m=>m.startsWith("✗"))&&<Badge variant="warn" t={t}>⚠ Errors</Badge>}</summary>
+      <summary className={cn("text-sm font-semibold cursor-pointer select-none",t.text)}><span className={cn("text-xs px-1.5 py-0.5 rounded mr-2",t.bgInput,t.textFaint)}>Step 5</span>🛠️ AA Configuration Setup <span className={cn("text-xs font-normal",t.textFaint)}>— Service Accounts, Sources & Scans (Optional)</span> {aaConfigBusy&&<span className={cn("text-xs animate-pulse ml-1",t.accent)}>⏳ Running...</span>} {!aaConfigBusy&&aaConfigLog.length>0&&!aaConfigLog.some(m=>m.startsWith("✗"))&&<Badge variant="success" t={t}>✓ Complete</Badge>} {!aaConfigBusy&&aaConfigLog.some(m=>m.startsWith("✗"))&&<Badge variant="warn" t={t}>⚠ Errors</Badge>}</summary>
       <div className="mt-3 space-y-3">
         <div className={cn("p-2 rounded text-xs",t.bgInput,t.textMuted)}>One-time setup per AA environment. Requires <b>AA API Authentication</b> verified on the Connection tab (same-origin mode strongly recommended). Creates the Configuration page entries so a clean install matches a real lab. Idempotent — skips items that already exist by name.</div>
         <div className="space-y-1">
           <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.successBg,t.success)}>1/5</span><span className={cn("text-xs font-semibold",t.text)}>Service Accounts (3)</span><span className={cn("text-xs",t.textFaint)}>AD, Entra Reg App, SPO Reg App</span></div>
-          <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.successBg,t.success)}>2/5</span><span className={cn("text-xs font-semibold",t.text)}>Sources (5)</span><span className={cn("text-xs",t.textFaint)}>CloudLab AD, Windows FS, LUG, Entra ID, SharePoint</span></div>
+          <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.successBg,t.success)}>2/5</span><span className={cn("text-xs font-semibold",t.text)}>Sources (5)</span><span className={cn("text-xs",t.textFaint)}>AD, Windows FS, LUG, Entra ID, SharePoint</span></div>
           <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.successBg,t.success)}>3/5</span><span className={cn("text-xs font-semibold",t.text)}>Scans (8)</span><span className={cn("text-xs",t.textFaint)}>AD/Entra/FS/LUG Sync, FS+SPO Access & Sensitive Data — cronEnabled:false</span></div>
           <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.successBg,t.success)}>4/5</span><span className={cn("text-xs font-semibold",t.text)}>Scan Executions (8)</span><span className={cn("text-xs",t.textFaint)}>One completed execution per scan — populates Executions page</span></div>
           <div className="flex items-center gap-2"><span className={cn("text-xs px-2 py-0.5 rounded",t.warnBg||t.bgInput,"text-amber-400")}>5/5</span><span className={cn("text-xs font-semibold",t.text)}>Post-Setup SQL</span><span className={cn("text-xs",t.textFaint)}>📋 kubectl command — multi-execution history (3-7 historical executions per scan)</span></div>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           <button onClick={async()=>{
-            setAa26ConfigLog(["Starting AA Configuration Setup..."]);
-            setAa26ConfigBusy(true);setAa26PostSetupCmd(null);setAa26ConfigPhase(0);
+            setAaConfigLog(["Starting AA Configuration Setup..."]);
+            setAaConfigBusy(true);setAaPostSetupCmd(null);setAaConfigPhase(0);
             // v3.0.8: reset Phase 5 verification state at start of new run
             setPhase5PendingIds([]);setPhase5Status(null);setPhase5VerifyDetails(null);
             // Hook into log to advance phase counter
             const logFn = m => {
-              setAa26ConfigLog(prev=>[...prev,m]);
-              if(m.includes("Phase 1/5"))setAa26ConfigPhase(1);
-              else if(m.includes("Phase 2/5"))setAa26ConfigPhase(2);
-              else if(m.includes("Phase 3/5"))setAa26ConfigPhase(3);
-              else if(m.includes("Phase 4/5"))setAa26ConfigPhase(4);
-              else if(m.includes("Phase 5/5"))setAa26ConfigPhase(5);
+              setAaConfigLog(prev=>[...prev,m]);
+              if(m.includes("Phase 1/5"))setAaConfigPhase(1);
+              else if(m.includes("Phase 2/5"))setAaConfigPhase(2);
+              else if(m.includes("Phase 3/5"))setAaConfigPhase(3);
+              else if(m.includes("Phase 4/5"))setAaConfigPhase(4);
+              else if(m.includes("Phase 5/5"))setAaConfigPhase(5);
             };
             try {
-              const verify = await aa26VerifySession(cfg);
-              if (!verify.ok) { logFn(`✗ Session invalid: ${verify.error}. Verify on Connection tab.`); setAa26ConfigBusy(false); if(toast)toast(`Session invalid: ${verify.error}`,"error"); return; }
+              const verify = await aaVerifySession(cfg);
+              if (!verify.ok) { logFn(`✗ Session invalid: ${verify.error}. Verify on Connection tab.`); setAaConfigBusy(false); if(toast)toast(`Session invalid: ${verify.error}`,"error"); return; }
               logFn(`✓ Authenticated as ${verify.user.email} (${verify.user.role})`);
               logFn(``);
-              const result = await aa26RunFullConfig(cfg, logFn);
-              if (result.postSetupCmd) setAa26PostSetupCmd(result.postSetupCmd);
+              const result = await aaRunFullConfig(cfg, logFn);
+              if (result.postSetupCmd) setAaPostSetupCmd(result.postSetupCmd);
               // v3.0.8: stash the new exec IDs and mark Phase 5 as pending
               if (Array.isArray(result.newExecIds) && result.newExecIds.length > 0) {
                 setPhase5PendingIds(result.newExecIds);
@@ -6026,23 +6029,23 @@ fi
                   };
                 });
               }
-              setAa26ConfigPhase(5);
+              setAaConfigPhase(5);
               if(toast)toast(`AA Configuration complete — ${result.scnCreated} scans, ${result.execCreated} executions`,"success");
             } catch(e) { logFn(`✗ Error: ${e.message}`); if(toast)toast(`Configuration failed: ${e.message}`,"error"); }
-            setAa26ConfigBusy(false);
-          }} disabled={aa26ConfigBusy||(!cfg.connection.aa26SessionCookie&&!(typeof window!=="undefined"&&window.location.hostname===cfg.connection.aa26Host))} className={cn("text-xs px-4 py-2 rounded-lg font-semibold transition",t.btnAccent,"disabled:opacity-50")}>
-            {aa26ConfigBusy?"⏳ Configuring...":"🛠️ Configure AA (All Phases)"}
+            setAaConfigBusy(false);
+          }} disabled={aaConfigBusy||(!cfg.connection.aa26SessionCookie&&!(typeof window!=="undefined"&&window.location.hostname===cfg.connection.aa26Host))} className={cn("text-xs px-4 py-2 rounded-lg font-semibold transition",t.btnAccent,"disabled:opacity-50")}>
+            {aaConfigBusy?"⏳ Configuring...":"🛠️ Configure AA (All Phases)"}
           </button>
           {!cfg.connection.aa26SessionCookie&&!(typeof window!=="undefined"&&window.location.hostname===cfg.connection.aa26Host)&&<span className={cn("text-xs",t.warn)}>⚠ Set AA session cookie on Connection tab first (or host this app on the AA origin)</span>}
         </div>
         {/* v3.0 — Phase Progress Bar */}
-        {(aa26ConfigBusy||aa26ConfigPhase>0)&&<div className={cn("p-3 rounded-lg",t.bgInput)}>
-          <PhaseProgress phases={["Service Accounts","Sources","Scans","Executions","Post-Setup"]} current={aa26ConfigPhase} t={t}/>
+        {(aaConfigBusy||aaConfigPhase>0)&&<div className={cn("p-3 rounded-lg",t.bgInput)}>
+          <PhaseProgress phases={["Service Accounts","Sources","Scans","Executions","Post-Setup"]} current={aaConfigPhase} t={t}/>
         </div>}
-        {aa26ConfigLog.length>0&&<div className={cn("rounded-lg p-2 max-h-48 overflow-y-auto font-mono text-[10px] space-y-0.5",t.codeBlock)}>
-          {aa26ConfigLog.map((m,i)=><div key={i} className={m.startsWith("✗")||m.includes("Failed")?t.danger:m.startsWith("✓")||m.startsWith("→")?t.textMuted:t.textFaint}>{m}</div>)}
+        {aaConfigLog.length>0&&<div className={cn("rounded-lg p-2 max-h-48 overflow-y-auto font-mono text-[10px] space-y-0.5",t.codeBlock)}>
+          {aaConfigLog.map((m,i)=><div key={i} className={m.startsWith("✗")||m.includes("Failed")?t.danger:m.startsWith("✓")||m.startsWith("→")?t.textMuted:t.textFaint}>{m}</div>)}
         </div>}
-        {aa26PostSetupCmd&&<div className="space-y-2">
+        {aaPostSetupCmd&&<div className="space-y-2">
           {/* v3.0.8: Phase 5 application status banner — polls the API to verify the SQL has been applied */}
           {phase5Status==='pending'&&<div className={cn("p-3 rounded-lg border-2 flex items-start gap-3","bg-red-50 dark:bg-red-950/30 border-red-400 dark:border-red-800")}>
             <span className="text-2xl flex-shrink-0">⚠️</span>
@@ -6110,16 +6113,16 @@ fi
               <span className={cn("font-semibold",t.text)}>📋 Phase 5: Post-Setup Command (run on AA server)</span>
               <div className="flex gap-1.5">
                 <button onClick={downloadPostSetupScript} className={cn("text-xs px-2 py-1 rounded font-semibold",t.btnAccent)}>⬇️ Download Script</button>
-                <button onClick={()=>{navigator.clipboard.writeText(aa26PostSetupCmd);}} className={cn("text-xs px-2 py-1 rounded font-semibold",t.btnSecondary)}>📋 Copy to Clipboard</button>
+                <button onClick={()=>{navigator.clipboard.writeText(aaPostSetupCmd);}} className={cn("text-xs px-2 py-1 rounded font-semibold",t.btnSecondary)}>📋 Copy to Clipboard</button>
               </div>
             </div>
             <div className={cn("text-[10px] mb-2 space-y-1",t.textFaint)}>
               <p><b>What this does:</b> Backdates scan execution timestamps to 3 weeks ago with realistic durations, sets object counts (600-6,000) per scan type, and inserts synthetic MIP labels where applicable — none of which the REST API can do directly.</p>
-              <p><b>How to run (recommended):</b> 1) Click "Download Script" above. 2) Copy the .sh file to the AA server (<code className={cn("px-1 rounded",t.codeBlock)}>scp aa-post-setup-*.sh sysadmin@appaa:~/</code>). 3) SSH in and run <code className={cn("px-1 rounded",t.codeBlock)}>bash aa-post-setup-*.sh</code>. Confirmed live: pasting this command directly into an interactive SSH session can corrupt on the way in for a paste this large (a stray terminator or a later line landing mid-statement) — bash reading it from a real file sidesteps that entirely.</p>
+              <p><b>How to run (recommended):</b> 1) Click "Download Script" above. 2) Copy the .sh file to the AA server (<code className={cn("px-1 rounded",t.codeBlock)}>scp aa-post-setup-*.sh &lt;user&gt;@&lt;aa-host&gt;:~/</code>). 3) SSH in and run <code className={cn("px-1 rounded",t.codeBlock)}>bash aa-post-setup-*.sh</code>. Confirmed live: pasting this command directly into an interactive SSH session can corrupt on the way in for a paste this large (a stray terminator or a later line landing mid-statement) — bash reading it from a real file sidesteps that entirely.</p>
               <p><b>Copy to Clipboard</b> is still here for pasting into an editor or a short remote session, but isn't the recommended path for running it directly anymore.</p>
               <p><b>When to re-run:</b> Only after a fresh "Configure AA" run. Each run generates new UUIDs — always use the latest command.</p>
             </div>
-            <pre className={cn("text-[9px] max-h-32 overflow-auto p-1 rounded",t.codeBlock)} style={{whiteSpace:"pre-wrap",wordBreak:"break-all"}}>{aa26PostSetupCmd}</pre>
+            <pre className={cn("text-[9px] max-h-32 overflow-auto p-1 rounded",t.codeBlock)} style={{whiteSpace:"pre-wrap",wordBreak:"break-all"}}>{aaPostSetupCmd}</pre>
           </div>
         </div>}
       </div>
@@ -6227,7 +6230,7 @@ function CompatibilityDrawer({open,onClose,results,checking,error,liveVersion,on
   const problems=(results||[]).filter(r=>!r.ok);
   const clean=(results||[]).filter(r=>r.ok);
   const buildReport=()=>{
-    const lines=[`AA schema compatibility check — connected version v${liveVersion||'unknown'}, app validated against v${AA26_SUPPORTED_VERSIONS.join(', v')}`,''];
+    const lines=[`AA schema compatibility check — connected version v${liveVersion||'unknown'}, app validated against v${AA_SUPPORTED_VERSIONS.join(', v')}`,''];
     if(problems.length===0){lines.push('No drift found — every column the generator writes to exists on the connected instance.');}
     else{
       lines.push(`${problems.length} table(s) with drift:`);
@@ -6235,7 +6238,7 @@ function CompatibilityDrawer({open,onClose,results,checking,error,liveVersion,on
         if(!p.tableExists){lines.push(`- ${p.table}: TABLE NOT FOUND on this instance`);}
         else{lines.push(`- ${p.table}: missing column(s) ${p.missing.join(', ')}${p.extra.length?` (also has new column(s) not yet used: ${p.extra.join(', ')})`:''}`);}
       }
-      lines.push('','Please update the generator in aa26-demo-data-manager-v2.jsx to handle the drift above — adjust the affected table\'s cols/row-construction to match the current schema.');
+      lines.push('','Please update the generator in demo-data-manager.html to handle the drift above — adjust the affected table\'s cols/row-construction to match the current schema.');
     }
     return lines.join('\n');
   };
@@ -6529,10 +6532,10 @@ function App(){
               <div className={cn("text-[10px] uppercase tracking-[0.15em] flex items-center gap-1.5",t.textFaint)}>
                 <span>Netwrix Access Analyzer <span className={cn("ml-1",t.textMuted)}>v{APP_VERSION}</span></span>
                 <span className={t.textFaint}>·</span>
-                <span>Supports AA up to v{AA26_SUPPORTED_VERSIONS[AA26_SUPPORTED_VERSIONS.length-1]}</span>
+                <span>Supports AA up to v{AA_SUPPORTED_VERSIONS[AA_SUPPORTED_VERSIONS.length-1]}</span>
                 <HelpIcon text="May support newer versions based on schema/feature changes. Review audit and log for errors." t={t}/>
                 {cfg.connection.aa26LiveVersion && (
-                  AA26_SUPPORTED_VERSIONS.includes(cfg.connection.aa26LiveVersion)
+                  AA_SUPPORTED_VERSIONS.includes(cfg.connection.aa26LiveVersion)
                     ? <span className={cn("normal-case tracking-normal px-1.5 py-0.5 rounded border",t.successBg,t.success)} title="Connected AA version matches">✓ v{cfg.connection.aa26LiveVersion} connected</span>
                     : <span onClick={openCompatCheck} className={cn("normal-case tracking-normal px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-500 cursor-pointer hover:bg-amber-500/30")} title="Connected AA version differs from what this build was validated against — click to check what actually changed">⚠ v{cfg.connection.aa26LiveVersion} connected (differs — click to check)</span>
                 )}
@@ -6553,7 +6556,7 @@ function App(){
                     const blob = new Blob([JSON.stringify(exportCfg,null,2)],{type:"application/json"});
                     const a = document.createElement("a");
                     a.href = URL.createObjectURL(blob);
-                    a.download = `aa26-config-${cfg.global?.domainName||"demo"}-${new Date().toISOString().slice(0,10)}.json`;
+                    a.download = `aa-demo-config-${cfg.global?.domainName||"demo"}-${new Date().toISOString().slice(0,10)}.json`;
                     a.click();
                     setShowConfigMenu(false);
                     if(toast)toast("Configuration exported","success");

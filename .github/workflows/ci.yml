@@ -1,0 +1,31 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Parse JSX and check version/changelog
+        working-directory: .github/scripts
+        run: |
+          npm install --no-save --no-package-lock @babel/parser@7.26.9
+          node check-jsx.mjs ../../demo-data-manager.html ../../docs/CHANGELOG.md
+
+      - name: Lint installer
+        run: shellcheck install-demo-manager.sh
+
+      - name: Validate k8s manifest syntax
+        run: python3 -c "import sys, yaml; list(yaml.safe_load_all(open('demo-manager.yaml'))); print('✓ demo-manager.yaml parses')"
